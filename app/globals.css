@@ -1,0 +1,48 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  body {
+    @apply bg-slate-950 text-slate-100 antialiased selection:bg-indigo-500/30 selection:text-indigo-200;
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+@layer utilities {
+  .perspective-1000 {
+    perspective: 1200px;
+  }
+
+  .preserve-3d {
+    transform-style: preserve-3d;
+  }
+
+  .backface-hidden {
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+  }
+
+  .rotate-y-180 {
+    transform: rotateY(180deg);
+  }
+}
+
+/* Custom subtle scrollbars for mobile container */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.5);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(71, 85, 105, 0.5);
+  border-radius: 9999px;
+}

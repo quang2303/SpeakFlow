@@ -1,0 +1,18 @@
+{
+  "name": "SpeakFlow - Phản xạ Giao tiếp Tiếng Anh",
+  "short_name": "SpeakFlow",
+  "description": "Ứng dụng luyện phản xạ giao tiếp tiếng Anh bằng phương pháp Chunking, Active Recall, Spaced Repetition (SM-2) & Shadowing.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#020617",
+  "theme_color": "#020617",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
