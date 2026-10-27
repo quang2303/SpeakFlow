@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import {
   Flame,
@@ -23,11 +23,14 @@ import {
   getDecks,
   getStreakData,
   getActiveStorageMode,
+  getCurrentUser,
   StreakData,
   StorageMode,
+  UserProfile,
 } from "@/lib/dataService";
 import { Card, Deck } from "@/lib/seedData";
 import { isCardDue } from "@/lib/srs";
+import AuthUserTrigger from "@/components/AuthModal";
 
 function getDeckIcon(iconName: string) {
   switch (iconName) {
@@ -53,23 +56,30 @@ export default function HomePage() {
     todayReviewedCount: 0,
   });
   const [storageMode, setStorageMode] = useState<StorageMode>("local");
+  const [user, setUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    async function loadDashboard() {
-      setLoading(true);
-      const [loadedDecks, loadedCards] = await Promise.all([
-        getDecks(),
-        getCards(),
-      ]);
-      setDecks(loadedDecks);
-      setCards(loadedCards);
-      setStreak(getStreakData());
-      setStorageMode(getActiveStorageMode());
-      setLoading(false);
-    }
-    loadDashboard();
+  const loadDashboard = useCallback(async () => {
+    setLoading(true);
+    const [loadedDecks, loadedCards, currentUser] = await Promise.all([
+      getDecks(),
+      getCards(),
+      getCurrentUser(),
+    ]);
+    setDecks(loadedDecks);
+    setCards(loadedCards);
+    setUser(currentUser);
+    setStreak(getStreakData());
+    setStorageMode(getActiveStorageMode());
+    setLoading(false);
   }, []);
+
+  useEffect(() => {
+    loadDashboard();
+    const handler = () => loadDashboard();
+    window.addEventListener("speakflow-auth-changed", handler);
+    return () => window.removeEventListener("speakflow-auth-changed", handler);
+  }, [loadDashboard]);
 
   const dueCards = cards.filter((c) => isCardDue(c));
   const masteredCards = cards.filter(
@@ -80,10 +90,10 @@ export default function HomePage() {
   );
 
   return (
-    <div className="px-4 pt-5 pb-8 space-y-6">
-      {/* Top Bar: Brand + Storage Status */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2.5">
+    <div className="px-4 md:px-8 pt-5 md:pt-8 pb-8 space-y-6 md:space-y-8">
+      {/* Top Bar (Mobile: Brand + Auth, Desktop: Welcome Header + Cloud Status) */}
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5 md:hidden">
           <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-sky-500 via-indigo-500 to-emerald-500 p-[1.5px] shadow-lg shadow-indigo-500/20">
             <div className="w-full h-full bg-slate-950 rounded-[14px] flex items-center justify-center">
               <Zap className="w-5 h-5 text-sky-400 fill-sky-400/20" />
@@ -99,106 +109,82 @@ export default function HomePage() {
           </div>
         </div>
 
-        <Link
-          href="/manage"
-          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors ${
-            storageMode === "supabase"
-              ? "bg-emerald-500/10 text-emerald-300 border-emerald-500/30"
-              : "bg-slate-900 text-slate-300 border-slate-800 hover:border-slate-700"
-          }`}
-        >
-          {storageMode === "supabase" ? (
-            <>
-              <Database className="w-3 h-3 text-emerald-400" />
-              <span>Supabase Cloud</span>
-            </>
-          ) : (
-            <>
-              <HardDrive className="w-3 h-3 text-amber-400" />
-              <span>Local Mode</span>
-            </>
-          )}
-        </Link>
-      </div>
-
-      {/* Stats Row: Daily Streak & Phrases Mastered */}
-      <div className="grid grid-cols-2 gap-3">
-        <div className="bg-slate-900/90 border border-slate-800/90 rounded-2xl p-3.5 flex items-center gap-3 shadow-sm">
-          <div className="w-11 h-11 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center shrink-0">
-            <Flame className="w-6 h-6 text-amber-400 fill-amber-400/25" />
-          </div>
-          <div>
-            <div className="flex items-baseline gap-1">
-              <span className="text-2xl font-extrabold text-white">
-                {streak.currentStreak}
-              </span>
-              <span className="text-xs text-amber-300 font-medium">ngày</span>
-            </div>
-            <p className="text-[11px] text-slate-400">
-              Chuỗi học • Hôm nay: {streak.todayReviewedCount} thẻ
-            </p>
-          </div>
+        {/* Desktop Greeting Header */}
+        <div className="hidden md:block">
+          <h1 className="text-2xl lg:text-3xl font-extrabold text-white tracking-tight">
+            {user
+              ? `Xin chào, ${user.full_name}! 👋`
+              : "Bảng Điều Khiển Luyện Phản Xạ"}
+          </h1>
+          <p className="text-sm text-slate-400 mt-1">
+            {user
+              ? `Tiến trình học của bạn (${user.email}) đang được đồng bộ trực tiếp trên Supabase Cloud.`
+              : "Đăng nhập Google ở thanh bên trái để lưu lịch ôn tập SM-2 xuyên suốt PC & Điện thoại."}
+          </p>
         </div>
 
-        <div className="bg-slate-900/90 border border-slate-800/90 rounded-2xl p-3.5 flex items-center gap-3 shadow-sm">
-          <div className="w-11 h-11 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center shrink-0">
-            <Trophy className="w-6 h-6 text-emerald-400" />
+        <div className="flex items-center gap-2">
+          <div className="md:hidden">
+            <AuthUserTrigger compact />
           </div>
-          <div>
-            <div className="flex items-baseline gap-1">
-              <span className="text-2xl font-extrabold text-white">
-                {masteredCards.length}
-              </span>
-              <span className="text-xs text-slate-400 font-medium">
-                / {cards.length}
-              </span>
-            </div>
-            <p className="text-[11px] text-slate-400">
-              Cụm phản xạ thành thạo
-            </p>
-          </div>
+
+          <Link
+            href="/manage"
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+              storageMode === "supabase"
+                ? "bg-emerald-500/10 text-emerald-300 border-emerald-500/30"
+                : "bg-slate-900 text-slate-300 border-slate-800 hover:border-slate-700"
+            }`}
+          >
+            {storageMode === "supabase" ? (
+              <>
+                <Database className="w-3.5 h-3.5 text-emerald-400" />
+                <span className="hidden sm:inline">Supabase Cloud</span>
+              </>
+            ) : (
+              <>
+                <HardDrive className="w-3.5 h-3.5 text-amber-400" />
+                <span className="hidden sm:inline">Local Mode</span>
+              </>
+            )}
+          </Link>
         </div>
       </div>
 
-      {/* Motivational Micro-Banner */}
-      <div className="bg-gradient-to-r from-indigo-950/80 via-slate-900 to-sky-950/80 border border-indigo-500/25 rounded-2xl px-3.5 py-2.5 flex items-center gap-2.5">
-        <Sparkles className="w-4 h-4 text-sky-400 shrink-0" />
-        <p className="text-xs text-slate-200 leading-relaxed">
-          <span className="font-semibold text-sky-300">Mẹo phản xạ:</span> Đừng
-          dịch từng từ! Hãy đọc to cả cụm câu để cơ miệng nhớ tự động.
-        </p>
-      </div>
+      {/* Desktop 12-Col Hero Grid / Mobile Stacked */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
+        {/* Primary CTA Card: Bắt đầu Phiên học 5 Phút (Due Today) */}
+        <div className="lg:col-span-7 relative overflow-hidden rounded-3xl bg-gradient-to-br from-sky-600 via-indigo-600 to-indigo-800 p-5 md:p-7 shadow-xl shadow-indigo-950/60 border border-sky-400/30 flex flex-col justify-between">
+          <div className="absolute -right-8 -top-8 w-44 h-44 rounded-full bg-white/10 blur-2xl pointer-events-none" />
+          <div className="absolute -left-8 -bottom-8 w-36 h-36 rounded-full bg-sky-400/20 blur-2xl pointer-events-none" />
 
-      {/* Primary CTA Card: Bắt đầu Phiên học 5 Phút (Due Today) */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-sky-600 via-indigo-600 to-indigo-800 p-5 shadow-xl shadow-indigo-950/60 border border-sky-400/30">
-        <div className="absolute -right-8 -top-8 w-36 h-36 rounded-full bg-white/10 blur-2xl pointer-events-none" />
-        <div className="absolute -left-8 -bottom-8 w-32 h-32 rounded-full bg-sky-400/20 blur-2xl pointer-events-none" />
+          <div className="relative z-10 space-y-4">
+            <div className="flex items-center justify-between">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-white/15 text-white backdrop-blur-md">
+                <Clock className="w-3.5 h-3.5 text-sky-200" />
+                Spaced Repetition (SM-2)
+              </span>
+              <span className="text-xs font-semibold text-sky-100 bg-slate-950/40 px-3 py-1 rounded-full border border-white/10">
+                {loading ? "..." : `${dueCards.length} thẻ cần ôn hôm nay`}
+              </span>
+            </div>
 
-        <div className="relative z-10 space-y-4">
-          <div className="flex items-center justify-between">
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-white/15 text-white backdrop-blur-md">
-              <Clock className="w-3.5 h-3.5 text-sky-200" />
-              Spaced Repetition (SM-2)
-            </span>
-            <span className="text-xs font-semibold text-sky-100 bg-slate-950/40 px-2.5 py-1 rounded-full border border-white/10">
-              {loading ? "..." : `${dueCards.length} thẻ cần ôn`}
-            </span>
+            <div>
+              <h2 className="text-xl md:text-2xl font-extrabold text-white tracking-tight leading-snug">
+                Bắt đầu Phiên học 5 Phút (Due Today)
+              </h2>
+              <p className="text-xs md:text-sm text-sky-100/90 mt-1.5 leading-relaxed max-w-xl">
+                Nhìn tình huống tiếng Việt → Phản xạ nói câu tiếng Anh → Chấm
+                điểm phát âm trực tiếp bằng AI Voice (hỗ trợ phím tắt nhanh trên
+                PC).
+              </p>
+            </div>
           </div>
 
-          <div>
-            <h2 className="text-xl font-extrabold text-white tracking-tight leading-snug">
-              Bắt đầu Phiên học 5 Phút (Due Today)
-            </h2>
-            <p className="text-xs text-sky-100/90 mt-1 leading-relaxed">
-              Nhìn tình huống tiếng Việt → Phản xạ nói câu tiếng Anh → Chấm điểm
-              phát âm trực tiếp bằng AI Voice.
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2.5 pt-1">
+          <div className="relative z-10 flex items-center gap-3 pt-5">
             <Link
               href="/study"
-              className="flex-1 bg-white text-slate-950 hover:bg-sky-50 active:scale-[0.98] transition-all font-bold text-sm py-3 px-4 rounded-2xl flex items-center justify-center gap-2 shadow-lg"
+              className="flex-1 bg-white text-slate-950 hover:bg-sky-50 active:scale-[0.98] transition-all font-bold text-sm py-3.5 px-5 rounded-2xl flex items-center justify-center gap-2 shadow-lg"
             >
               <Play className="w-4 h-4 fill-slate-950" />
               <span>Học ngay ({dueCards.length} thẻ)</span>
@@ -206,21 +192,75 @@ export default function HomePage() {
 
             <Link
               href="/reflex"
-              className="bg-slate-950/40 hover:bg-slate-950/60 text-white border border-white/20 active:scale-[0.98] transition-all font-semibold text-xs py-3 px-3.5 rounded-2xl flex items-center justify-center gap-1.5"
+              className="bg-slate-950/40 hover:bg-slate-950/60 text-white border border-white/20 active:scale-[0.98] transition-all font-semibold text-xs md:text-sm py-3.5 px-4 rounded-2xl flex items-center justify-center gap-2"
               title="Thử thách phản xạ 60 giây"
             >
               <Mic className="w-4 h-4 text-amber-300" />
-              <span>60s Drill</span>
+              <span>Phản xạ 60s</span>
             </Link>
+          </div>
+        </div>
+
+        {/* Right 5 Cols: Stats Cards + Motivational Tip */}
+        <div className="lg:col-span-5 flex flex-col justify-between gap-3.5">
+          <div className="grid grid-cols-2 gap-3.5 flex-1">
+            <div className="bg-slate-900/90 border border-slate-800/90 rounded-2xl p-4 flex flex-col justify-between shadow-sm">
+              <div className="w-11 h-11 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center">
+                <Flame className="w-6 h-6 text-amber-400 fill-amber-400/25" />
+              </div>
+              <div className="mt-3">
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-2xl md:text-3xl font-extrabold text-white">
+                    {streak.currentStreak}
+                  </span>
+                  <span className="text-xs text-amber-300 font-semibold">
+                    ngày liên tiếp
+                  </span>
+                </div>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Hôm nay đã ôn: {streak.todayReviewedCount} thẻ
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-slate-900/90 border border-slate-800/90 rounded-2xl p-4 flex flex-col justify-between shadow-sm">
+              <div className="w-11 h-11 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center">
+                <Trophy className="w-6 h-6 text-emerald-400" />
+              </div>
+              <div className="mt-3">
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-2xl md:text-3xl font-extrabold text-white">
+                    {masteredCards.length}
+                  </span>
+                  <span className="text-xs text-slate-400 font-medium">
+                    / {cards.length} câu
+                  </span>
+                </div>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Cụm phản xạ thành thạo
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Motivational Micro-Banner */}
+          <div className="bg-gradient-to-r from-indigo-950/80 via-slate-900 to-sky-950/80 border border-indigo-500/25 rounded-2xl px-4 py-3.5 flex items-center gap-3">
+            <Sparkles className="w-5 h-5 text-sky-400 shrink-0" />
+            <p className="text-xs text-slate-200 leading-relaxed">
+              <span className="font-semibold text-sky-300">
+                Phương pháp Chunking:
+              </span>{" "}
+              Đừng dịch từng từ! Hãy đọc to cả cụm câu để cơ miệng nhớ tự động.
+            </p>
           </div>
         </div>
       </div>
 
-      {/* Decks Grid */}
-      <div className="space-y-3">
+      {/* Decks Grid (1 Col on Mobile, 2 Cols on Desktop PC) */}
+      <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="text-base font-bold text-white">
+            <h3 className="text-base md:text-lg font-bold text-white">
               Chủ đề Giao tiếp Thực chiến
             </h3>
             <p className="text-xs text-slate-400">
@@ -230,23 +270,23 @@ export default function HomePage() {
           </div>
           <Link
             href="/manage"
-            className="text-xs font-semibold text-sky-400 hover:text-sky-300"
+            className="text-xs md:text-sm font-semibold text-sky-400 hover:text-sky-300 bg-sky-500/10 border border-sky-500/25 px-3.5 py-1.5 rounded-xl"
           >
-            + Thêm câu
+            + Thêm mẫu câu mới
           </Link>
         </div>
 
         {loading ? (
-          <div className="space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {[1, 2, 3, 4].map((n) => (
               <div
                 key={n}
-                className="h-28 rounded-2xl bg-slate-900/60 border border-slate-800 animate-pulse"
+                className="h-36 rounded-2xl bg-slate-900/60 border border-slate-800 animate-pulse"
               />
             ))}
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {decks.map((deck) => {
               const Icon = getDeckIcon(deck.icon);
               const deckCards = cards.filter((c) => c.deck_id === deck.id);
@@ -261,27 +301,25 @@ export default function HomePage() {
               return (
                 <div
                   key={deck.id}
-                  className="bg-slate-900/90 hover:bg-slate-900 border border-slate-800/90 rounded-2xl p-4 transition-all space-y-3 shadow-sm"
+                  className="bg-slate-900/90 hover:bg-slate-900 border border-slate-800/90 hover:border-slate-700 rounded-3xl p-5 transition-all flex flex-col justify-between gap-4 shadow-sm"
                 >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-start gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-sky-500/10 border border-sky-500/25 flex items-center justify-center shrink-0 mt-0.5">
-                        <Icon className="w-5 h-5 text-sky-400" />
-                      </div>
-                      <div>
-                        <h4 className="font-bold text-sm text-white leading-snug">
-                          {deck.title}
-                        </h4>
-                        <p className="text-xs text-slate-400 line-clamp-2 mt-0.5 leading-relaxed">
-                          {deck.description}
-                        </p>
-                      </div>
+                  <div className="flex items-start gap-3.5">
+                    <div className="w-12 h-12 rounded-2xl bg-sky-500/10 border border-sky-500/25 flex items-center justify-center shrink-0">
+                      <Icon className="w-6 h-6 text-sky-400" />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-base text-white leading-snug">
+                        {deck.title}
+                      </h4>
+                      <p className="text-xs text-slate-400 line-clamp-2 mt-1 leading-relaxed">
+                        {deck.description}
+                      </p>
                     </div>
                   </div>
 
                   {/* Progress Bar */}
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between text-[11px]">
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-xs">
                       <span className="text-slate-400">
                         Tiến độ:{" "}
                         <strong className="text-slate-200">
@@ -301,7 +339,7 @@ export default function HomePage() {
                           : "Đã hoàn thành hôm nay"}
                       </span>
                     </div>
-                    <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+                    <div className="w-full h-2.5 bg-slate-800 rounded-full overflow-hidden">
                       <div
                         className="h-full bg-gradient-to-r from-sky-500 to-emerald-400 rounded-full transition-all duration-500"
                         style={{ width: `${Math.max(progressPct, 4)}%` }}
@@ -310,16 +348,16 @@ export default function HomePage() {
                   </div>
 
                   {/* Action Footer */}
-                  <div className="flex items-center justify-between pt-1">
-                    <span className="text-[11px] text-slate-400">
-                      Luyện Active Recall & Shadowing
+                  <div className="flex items-center justify-between pt-1 border-t border-slate-800/70">
+                    <span className="text-xs text-slate-400">
+                      Active Recall & Shadowing
                     </span>
                     <Link
                       href={`/study?deck=${deck.id}`}
-                      className="inline-flex items-center gap-1 text-xs font-semibold text-sky-300 bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/30 px-3 py-1.5 rounded-xl transition-colors"
+                      className="inline-flex items-center gap-1.5 text-xs font-bold text-sky-300 bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/30 px-3.5 py-2 rounded-xl transition-colors"
                     >
                       <span>Luyện chủ đề này</span>
-                      <ChevronRight className="w-3.5 h-3.5" />
+                      <ChevronRight className="w-4 h-4" />
                     </Link>
                   </div>
                 </div>

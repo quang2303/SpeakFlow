@@ -10,7 +10,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "SpeakFlow - Phản xạ Giao tiếp Tiếng Anh",
+  title: "SpeakFlow - Phản xạ Giao tiếp Tiếng Anh (PC & Mobile)",
   description:
     "Ứng dụng luyện phản xạ giao tiếp tiếng Anh với phương pháp Chunking, Active Recall, Spaced Repetition (SM-2) & Luyện nói Shadowing.",
   manifest: "/manifest.json",
@@ -40,10 +40,16 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="vi" className="dark">
-      <body className={`${inter.variable} font-sans bg-slate-950 text-slate-100`}>
-        <div className="max-w-md mx-auto min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-between shadow-2xl border-x border-slate-900/80 relative overflow-x-hidden">
-          <main className="flex-1 pb-24">{children}</main>
+      <body
+        className={`${inter.variable} font-sans bg-slate-950 text-slate-100 min-h-screen`}
+      >
+        <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col md:flex-row">
           <BottomNav />
+          <main className="flex-1 md:pl-72 lg:pl-80 pb-24 md:pb-10">
+            <div className="max-w-md md:max-w-6xl mx-auto w-full">
+              {children}
+            </div>
+          </main>
         </div>
       </body>
     </html>

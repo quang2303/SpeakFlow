@@ -7,6 +7,7 @@ const STORAGE_KEYS = {
   CARDS: "speakflow_cards_v1",
   STREAK: "speakflow_streak_v1",
   FORCE_LOCAL: "speakflow_force_local_v1",
+  USER_PROFILE: "speakflow_user_profile_v1",
 };
 
 const DEFAULT_SUPABASE_URL = "https://ncfudvrowukvppppexcf.supabase.co";
@@ -19,13 +20,20 @@ export interface StreakData {
   todayReviewedCount: number;
 }
 
+export interface UserProfile {
+  id: string; // UUID
+  email: string;
+  full_name: string;
+  avatar_url?: string;
+  provider: "google" | "cloud";
+}
+
 export type StorageMode = "supabase" | "local";
 
 let supabaseInstance: SupabaseClient | null = null;
 
 function resolveSupabaseCredentials(): { url: string; key: string } | null {
-  const url =
-    process.env.NEXT_PUBLIC_SUPABASE_URL || DEFAULT_SUPABASE_URL;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || DEFAULT_SUPABASE_URL;
   const key =
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
@@ -40,6 +48,47 @@ function resolveSupabaseCredentials(): { url: string; key: string } | null {
     return null;
   }
   return { url, key };
+}
+
+/**
+ * Generate a deterministic UUID from an email string so the same Gmail
+ * maps to the exact same UUID across PC and Mobile devices.
+ */
+export function emailToDeterministicUuid(email: string): string {
+  const clean = email.trim().toLowerCase();
+  let h1 = 0xdeadbeef ^ clean.length;
+  let h2 = 0x41c6ce57 ^ clean.length;
+  let h3 = 0x12345678 ^ clean.length;
+  let h4 = 0x87654321 ^ clean.length;
+
+  for (let i = 0; i < clean.length; i++) {
+    const ch = clean.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+    h3 = Math.imul(h3 ^ ch, 2246822507);
+    h4 = Math.imul(h4 ^ ch, 3266489909);
+  }
+
+  h1 =
+    Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^
+    Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 =
+    Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^
+    Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  h3 =
+    Math.imul(h3 ^ (h3 >>> 16), 2246822507) ^
+    Math.imul(h4 ^ (h4 >>> 13), 3266489909);
+  h4 =
+    Math.imul(h4 ^ (h4 >>> 16), 2246822507) ^
+    Math.imul(h3 ^ (h3 >>> 13), 3266489909);
+
+  const hex = (n: number) => (n >>> 0).toString(16).padStart(8, "0");
+  const fullHex = hex(h1) + hex(h2) + hex(h3) + hex(h4);
+
+  return `${fullHex.slice(0, 8)}-${fullHex.slice(8, 12)}-4${fullHex.slice(
+    13,
+    16
+  )}-a${fullHex.slice(17, 20)}-${fullHex.slice(20, 32)}`;
 }
 
 /**
@@ -77,12 +126,254 @@ export function setForceLocalMode(forceLocal: boolean): void {
     STORAGE_KEYS.FORCE_LOCAL,
     forceLocal ? "true" : "false"
   );
+  window.dispatchEvent(new Event("speakflow-auth-changed"));
 }
 
 export function isForceLocalMode(): boolean {
   if (typeof window === "undefined") return false;
   return window.localStorage.getItem(STORAGE_KEYS.FORCE_LOCAL) === "true";
 }
+
+// ============================================================================
+// GOOGLE AUTH & CLOUD USER PROFILE MANAGEMENT
+// ============================================================================
+
+export function getStoredUserProfile(): UserProfile | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEYS.USER_PROFILE);
+    if (!raw) return null;
+    return JSON.parse(raw) as UserProfile;
+  } catch {
+    return null;
+  }
+}
+
+function saveStoredUserProfile(profile: UserProfile | null): void {
+  if (typeof window === "undefined") return;
+  if (!profile) {
+    window.localStorage.removeItem(STORAGE_KEYS.USER_PROFILE);
+  } else {
+    window.localStorage.setItem(
+      STORAGE_KEYS.USER_PROFILE,
+      JSON.stringify(profile)
+    );
+  }
+  window.dispatchEvent(new Event("speakflow-auth-changed"));
+}
+
+/**
+ * Get active logged-in user (checks Supabase OAuth session first, then stored Google/Cloud profile)
+ */
+export async function getCurrentUser(): Promise<UserProfile | null> {
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (session?.user) {
+        const u = session.user;
+        const profile: UserProfile = {
+          id: u.id,
+          email: u.email || "",
+          full_name:
+            u.user_metadata?.full_name ||
+            u.user_metadata?.name ||
+            u.email?.split("@")[0] ||
+            "Học viên SpeakFlow",
+          avatar_url:
+            u.user_metadata?.avatar_url || u.user_metadata?.picture || undefined,
+          provider: "google",
+        };
+        saveStoredUserProfile(profile);
+        return profile;
+      }
+    } catch {
+      // Fallback to stored profile
+    }
+  }
+  return getStoredUserProfile();
+}
+
+/**
+ * Trigger Supabase Google OAuth Sign-In
+ */
+export async function signInWithGoogleOAuth(): Promise<{
+  ok: boolean;
+  error?: string;
+}> {
+  const supabase = getSupabaseClient();
+  if (!supabase) {
+    return {
+      ok: false,
+      error: "Đang ở chế độ Local. Hãy bật chế độ Supabase Cloud trước.",
+    };
+  }
+
+  try {
+    const redirectTo =
+      typeof window !== "undefined" ? window.location.origin : undefined;
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo,
+        queryParams: {
+          access_type: "offline",
+          prompt: "consent",
+        },
+      },
+    });
+    if (error) {
+      return { ok: false, error: error.message };
+    }
+    return { ok: true };
+  } catch (err) {
+    return {
+      ok: false,
+      error:
+        err instanceof Error ? err.message : "Không thể kết nối Google OAuth",
+    };
+  }
+}
+
+/**
+ * Instant Google / Gmail Cloud Sync Sign-In (Works immediately even before Google OAuth Client ID is configured in Supabase)
+ * Syncs all learning progress & streaks to `user_card_progress` and `user_stats` on Supabase by Gmail!
+ */
+export async function signInWithGmailCloudSync(
+  email: string,
+  fullName?: string
+): Promise<UserProfile> {
+  const cleanEmail = email.trim().toLowerCase();
+  const displayName =
+    fullName?.trim() ||
+    cleanEmail
+      .split("@")[0]
+      .replace(/[._-]/g, " ")
+      .replace(/\b\w/g, (l) => l.toUpperCase());
+
+  const userId = emailToDeterministicUuid(cleanEmail);
+  const avatarUrl = `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(
+    displayName
+  )}&backgroundColor=0284c7,4f46e5,059669`;
+
+  const profile: UserProfile = {
+    id: userId,
+    email: cleanEmail,
+    full_name: displayName,
+    avatar_url: avatarUrl,
+    provider: "cloud",
+  };
+
+  saveStoredUserProfile(profile);
+  await syncUserProgressWithCloud(profile);
+  return profile;
+}
+
+/**
+ * Sign out current user
+ */
+export async function signOutUser(): Promise<void> {
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    try {
+      await supabase.auth.signOut();
+    } catch {
+      // ignore
+    }
+  }
+  saveStoredUserProfile(null);
+}
+
+/**
+ * Sync local practiced cards & streak with Supabase `user_card_progress` and `user_stats`
+ */
+export async function syncUserProgressWithCloud(
+  user: UserProfile
+): Promise<void> {
+  const supabase = getSupabaseClient();
+  if (!supabase) return;
+
+  try {
+    // 1. Sync user_stats (streak)
+    const localStreak = getStreakData();
+    const { data: existingStats } = await supabase
+      .from("user_stats")
+      .select("*")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (existingStats) {
+      const mergedStreak: StreakData = {
+        currentStreak: Math.max(
+          localStreak.currentStreak,
+          existingStats.current_streak || 1
+        ),
+        lastStudyDate:
+          existingStats.last_study_date || localStreak.lastStudyDate,
+        todayReviewedCount: Math.max(
+          localStreak.todayReviewedCount,
+          existingStats.today_reviewed_count || 0
+        ),
+      };
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(
+          STORAGE_KEYS.STREAK,
+          JSON.stringify(mergedStreak)
+        );
+      }
+      await supabase.from("user_stats").upsert({
+        user_id: user.id,
+        email: user.email,
+        full_name: user.full_name,
+        avatar_url: user.avatar_url || null,
+        current_streak: mergedStreak.currentStreak,
+        last_study_date: mergedStreak.lastStudyDate,
+        today_reviewed_count: mergedStreak.todayReviewedCount,
+        updated_at: new Date().toISOString(),
+      });
+    } else {
+      await supabase.from("user_stats").upsert({
+        user_id: user.id,
+        email: user.email,
+        full_name: user.full_name,
+        avatar_url: user.avatar_url || null,
+        current_streak: localStreak.currentStreak,
+        last_study_date: localStreak.lastStudyDate,
+        today_reviewed_count: localStreak.todayReviewedCount,
+        updated_at: new Date().toISOString(),
+      });
+    }
+
+    // 2. Push any locally practiced cards to `user_card_progress`
+    const { cards: localCards } = ensureLocalSeed();
+    const practicedLocal = localCards.filter(
+      (c) => c.last_practiced_at !== null || c.box > 1
+    );
+
+    if (practicedLocal.length > 0) {
+      const rows = practicedLocal.map((c) => ({
+        user_id: user.id,
+        card_id: c.id,
+        box: c.box,
+        interval_days: c.interval_days,
+        ease_factor: c.ease_factor,
+        next_review_at: c.next_review_at,
+        last_practiced_at: c.last_practiced_at || new Date().toISOString(),
+      }));
+      await supabase
+        .from("user_card_progress")
+        .upsert(rows, { onConflict: "user_id,card_id" });
+    }
+  } catch {
+    // Ignore network errors cleanly
+  }
+}
+
+// ============================================================================
+// CORE DATA SERVICE LAYER (DECKS, CARDS & PER-USER SRS PROGRESS)
+// ============================================================================
 
 /**
  * Initialize localStorage with seed data if empty
@@ -142,7 +433,6 @@ export async function getDecks(): Promise<Deck[]> {
         if (data.length > 0) {
           return data as Deck[];
         }
-        // Table exists in Supabase but is empty -> auto-seed initial decks
         const { data: seededDecks, error: seedErr } = await supabase
           .from("decks")
           .upsert(SEED_DECKS, { onConflict: "id" })
@@ -160,10 +450,12 @@ export async function getDecks(): Promise<Deck[]> {
 }
 
 /**
- * Fetch all cards (optionally filtered by deck_id)
+ * Fetch all cards (optionally filtered by deck_id) + merge logged-in user's personal SRS progress
  */
 export async function getCards(deckId?: string): Promise<Card[]> {
   const supabase = getSupabaseClient();
+  const activeUser = getStoredUserProfile();
+
   if (supabase) {
     try {
       let query = supabase.from("cards").select("*");
@@ -172,19 +464,47 @@ export async function getCards(deckId?: string): Promise<Card[]> {
       }
       const { data, error } = await query;
       if (!error && data) {
-        if (data.length > 0) {
-          return data as Card[];
-        }
-        if (!deckId) {
-          // Table exists in Supabase but is empty -> auto-seed initial cards
+        let baseCards: Card[] = data as Card[];
+
+        if (baseCards.length === 0 && !deckId) {
           await supabase.from("decks").upsert(SEED_DECKS, { onConflict: "id" });
           const { data: seededCards, error: seedErr } = await supabase
             .from("cards")
             .upsert(SEED_CARDS, { onConflict: "id" })
             .select("*");
           if (!seedErr && seededCards && seededCards.length > 0) {
-            return seededCards as Card[];
+            baseCards = seededCards as Card[];
           }
+        }
+
+        // If a user is logged in, overlay their personal `user_card_progress`
+        if (activeUser && baseCards.length > 0) {
+          const { data: progressData } = await supabase
+            .from("user_card_progress")
+            .select("*")
+            .eq("user_id", activeUser.id);
+
+          if (progressData && progressData.length > 0) {
+            const progressMap = new Map(
+              progressData.map((p) => [p.card_id, p])
+            );
+            baseCards = baseCards.map((card) => {
+              const userProg = progressMap.get(card.id);
+              if (!userProg) return card;
+              return {
+                ...card,
+                box: userProg.box,
+                interval_days: userProg.interval_days,
+                ease_factor: userProg.ease_factor,
+                next_review_at: userProg.next_review_at,
+                last_practiced_at: userProg.last_practiced_at,
+              };
+            });
+          }
+        }
+
+        if (baseCards.length > 0) {
+          return baseCards;
         }
       }
     } catch {
@@ -214,7 +534,7 @@ export async function getDueCards(deckId?: string): Promise<Card[]> {
 }
 
 /**
- * Update a card's SRS values after user rating
+ * Update a card's SRS values after user rating (saves to per-user table if logged in + card table)
  */
 export async function submitCardReview(
   card: Card,
@@ -226,27 +546,61 @@ export async function submitCardReview(
     ...srsUpdate,
   };
 
+  let latestStreak: StreakData | null = null;
+
   // Always update localStorage cache
   if (typeof window !== "undefined") {
     const { cards } = ensureLocalSeed();
     const nextCards = cards.map((c) => (c.id === card.id ? updatedCard : c));
     window.localStorage.setItem(STORAGE_KEYS.CARDS, JSON.stringify(nextCards));
-    recordStudyActivity();
+    latestStreak = recordStudyActivity();
   }
 
   const supabase = getSupabaseClient();
+  const activeUser = getStoredUserProfile();
+
   if (supabase) {
     try {
-      await supabase
-        .from("cards")
-        .update({
-          box: srsUpdate.box,
-          interval_days: srsUpdate.interval_days,
-          ease_factor: srsUpdate.ease_factor,
-          next_review_at: srsUpdate.next_review_at,
-          last_practiced_at: srsUpdate.last_practiced_at,
-        })
-        .eq("id", card.id);
+      if (activeUser) {
+        // Save to per-user progress table
+        await supabase.from("user_card_progress").upsert(
+          {
+            user_id: activeUser.id,
+            card_id: card.id,
+            box: srsUpdate.box,
+            interval_days: srsUpdate.interval_days,
+            ease_factor: srsUpdate.ease_factor,
+            next_review_at: srsUpdate.next_review_at,
+            last_practiced_at: srsUpdate.last_practiced_at,
+          },
+          { onConflict: "user_id,card_id" }
+        );
+
+        if (latestStreak) {
+          await supabase.from("user_stats").upsert({
+            user_id: activeUser.id,
+            email: activeUser.email,
+            full_name: activeUser.full_name,
+            avatar_url: activeUser.avatar_url || null,
+            current_streak: latestStreak.currentStreak,
+            last_study_date: latestStreak.lastStudyDate,
+            today_reviewed_count: latestStreak.todayReviewedCount,
+            updated_at: new Date().toISOString(),
+          });
+        }
+      } else {
+        // Anonymous global card table update
+        await supabase
+          .from("cards")
+          .update({
+            box: srsUpdate.box,
+            interval_days: srsUpdate.interval_days,
+            ease_factor: srsUpdate.ease_factor,
+            next_review_at: srsUpdate.next_review_at,
+            last_practiced_at: srsUpdate.last_practiced_at,
+          })
+          .eq("id", card.id);
+      }
     } catch {
       // Already saved in localStorage
     }
@@ -406,7 +760,7 @@ export function resetLocalToSeed(): void {
 }
 
 /**
- * Daily Streak tracking in localStorage
+ * Daily Streak tracking
  */
 function getTodayDateString(): string {
   const now = new Date();

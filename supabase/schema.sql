@@ -1,5 +1,5 @@
 -- ============================================================================
--- SPEAKFLOW - SUPABASE POSTGRESQL SCHEMA & INITIAL SEED DATA
+-- SPEAKFLOW - SUPABASE POSTGRESQL SCHEMA, USER PROGRESS & INITIAL SEED DATA
 -- Copy and paste this entire script into your Supabase SQL Editor and click RUN
 -- ============================================================================
 
@@ -21,6 +21,7 @@ BEGIN
   CREATE TABLE IF NOT EXISTS public.cards (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     deck_id UUID NOT NULL REFERENCES public.decks(id) ON DELETE CASCADE,
+    user_id UUID,
     phrase_en TEXT NOT NULL,
     ipa TEXT NOT NULL,
     meaning_vi TEXT NOT NULL,
@@ -34,13 +35,48 @@ BEGIN
     last_practiced_at TIMESTAMPTZ
   );
 
+  -- Ensure `user_id` column exists on `cards` if table was created earlier
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'cards' AND column_name = 'user_id'
+  ) THEN
+    ALTER TABLE public.cards ADD COLUMN user_id UUID;
+  END IF;
+
+  -- 3. Create `user_card_progress` table (Per-user SRS progress synced across PC & Mobile)
+  CREATE TABLE IF NOT EXISTS public.user_card_progress (
+    user_id UUID NOT NULL,
+    card_id UUID NOT NULL REFERENCES public.cards(id) ON DELETE CASCADE,
+    box INT NOT NULL DEFAULT 1 CHECK (box BETWEEN 1 AND 5),
+    interval_days INT NOT NULL DEFAULT 0,
+    ease_factor FLOAT NOT NULL DEFAULT 2.5,
+    next_review_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_practiced_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (user_id, card_id)
+  );
+
+  -- 4. Create `user_stats` table (Per-user daily streak & profile info)
+  CREATE TABLE IF NOT EXISTS public.user_stats (
+    user_id UUID PRIMARY KEY,
+    email TEXT,
+    full_name TEXT,
+    avatar_url TEXT,
+    current_streak INT NOT NULL DEFAULT 1,
+    last_study_date TEXT,
+    today_reviewed_count INT NOT NULL DEFAULT 0,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  );
+
   -- Create helpful indexes for fast SRS queries
   CREATE INDEX IF NOT EXISTS idx_cards_deck_id ON public.cards(deck_id);
   CREATE INDEX IF NOT EXISTS idx_cards_next_review_at ON public.cards(next_review_at);
+  CREATE INDEX IF NOT EXISTS idx_user_card_progress_user ON public.user_card_progress(user_id);
 
-  -- Enable Row Level Security (RLS) with open policies for single-user / demo deployment
+  -- Enable Row Level Security (RLS)
   ALTER TABLE public.decks ENABLE ROW LEVEL SECURITY;
   ALTER TABLE public.cards ENABLE ROW LEVEL SECURITY;
+  ALTER TABLE public.user_card_progress ENABLE ROW LEVEL SECURITY;
+  ALTER TABLE public.user_stats ENABLE ROW LEVEL SECURITY;
 
   IF NOT EXISTS (
     SELECT 1 FROM pg_policies WHERE tablename = 'decks' AND policyname = 'Allow public access to decks'
@@ -54,7 +90,19 @@ BEGIN
     CREATE POLICY "Allow public access to cards" ON public.cards FOR ALL USING (true) WITH CHECK (true);
   END IF;
 
-  -- 3. SEED DATA: 4 CONVERSATIONAL DECKS + 30 HIGH-UTILITY REFLEX CARDS
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE tablename = 'user_card_progress' AND policyname = 'Allow public access to user_card_progress'
+  ) THEN
+    CREATE POLICY "Allow public access to user_card_progress" ON public.user_card_progress FOR ALL USING (true) WITH CHECK (true);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE tablename = 'user_stats' AND policyname = 'Allow public access to user_stats'
+  ) THEN
+    CREATE POLICY "Allow public access to user_stats" ON public.user_stats FOR ALL USING (true) WITH CHECK (true);
+  END IF;
+
+  -- 5. SEED DATA: 4 CONVERSATIONAL DECKS + 30 HIGH-UTILITY REFLEX CARDS
   INSERT INTO public.decks (id, title, description, icon, created_at) VALUES
     ('11111111-1111-4111-8111-111111111111', 'Phản xạ Giao tiếp Hàng ngày', 'Các cụm từ tự nhiên dùng mỗi ngày giúp bạn bật ra ý ngay lập tức không cần dịch từng chữ.', 'Zap', NOW()),
     ('22222222-2222-4222-8222-222222222222', 'Tiếng Anh Công sở & Họp hành', 'Cụm từ chuyên nghiệp để thảo luận dự án, báo cáo tiến độ, đồng tình hoặc phản biện khéo léo.', 'Briefcase', NOW()),
