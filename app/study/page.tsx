@@ -9,9 +9,13 @@ import {
   Turtle,
   Mic,
   MicOff,
+  Loader2,
+  AlertTriangle,
   Lightbulb,
   RotateCw,
+  RotateCcw,
   CheckCircle2,
+  Check,
   Sparkles,
   ArrowLeft,
   Layers,
@@ -29,11 +33,14 @@ import {
   SRSRating,
 } from "@/lib/srs";
 import {
-  evaluateSpeechAccuracy,
+  evaluatePronunciation,
+  MicVisualState,
+  PronunciationEvaluationResult,
   speakEnglish,
+  speakText,
   SpeechRecognizerController,
-  SpeechScoreResult,
   startSpeechRecognition,
+  WordEvaluation,
 } from "@/lib/speech";
 
 /**
@@ -85,6 +92,139 @@ function renderHighlightedSentence(sentence: string, phrase: string) {
   );
 }
 
+/**
+ * Reusable Interactive Word-by-Word Pronunciation Breakdown Panel
+ * Renders Green badges for correct words, Red wavy-underlined badges for mispronounced/missing words,
+ * shows `Nghe thành: "[spokenAs]"` underneath mispronounced words, and supports tap-to-pronounce at 0.7x speed.
+ */
+function PronunciationFeedbackPanel({
+  evaluation,
+  isLive,
+  onRetry,
+}: {
+  evaluation: PronunciationEvaluationResult;
+  isLive: boolean;
+  onRetry: () => void;
+}) {
+  const [activeSpokenWordIdx, setActiveSpokenWordIdx] = useState<number | null>(
+    null
+  );
+
+  function handleTapWord(word: WordEvaluation, idx: number) {
+    setActiveSpokenWordIdx(idx);
+    speakText(word.cleanWord || word.originalWord, 0.7, () => {
+      setActiveSpokenWordIdx((prev) => (prev === idx ? null : prev));
+    });
+  }
+
+  return (
+    <div
+      className={`rounded-2xl p-3.5 md:p-4 border space-y-3 transition-all ${
+        isLive
+          ? "bg-slate-900/95 border-sky-500/40"
+          : evaluation.level === "excellent"
+          ? "bg-emerald-500/10 border-emerald-500/30"
+          : evaluation.level === "good"
+          ? "bg-amber-500/10 border-amber-500/30"
+          : "bg-rose-500/10 border-rose-500/30"
+      }`}
+    >
+      {/* Summary Score Banner */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <span
+            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-extrabold border ${
+              isLive
+                ? "bg-sky-500/20 text-sky-300 border-sky-500/40"
+                : evaluation.score >= 85
+                ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
+                : evaluation.score >= 60
+                ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
+                : "bg-rose-500/20 text-rose-300 border-rose-500/40"
+            }`}
+          >
+            <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+            <span>
+              Đúng {evaluation.correctCount}/{evaluation.totalCount} từ (
+              {evaluation.score}%)
+            </span>
+          </span>
+          {isLive && (
+            <span className="text-[11px] font-semibold text-sky-300 animate-pulse">
+              • Đang dò từng từ...
+            </span>
+          )}
+        </div>
+
+        {!isLive && (
+          <button
+            type="button"
+            onClick={onRetry}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-xs font-bold text-sky-300 border border-sky-500/30 active:scale-95 transition-all"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            <span>Đọc lại câu này</span>
+          </button>
+        )}
+      </div>
+
+      {!isLive && (
+        <p className="text-xs text-slate-300 font-medium">
+          {evaluation.feedback}
+        </p>
+      )}
+
+      {/* Interactive Word Badges */}
+      <div className="flex flex-wrap items-start gap-2 pt-1">
+        {evaluation.words.map((word, idx) => {
+          const isCorrect = word.status === "correct";
+          const isSpeakingThis = activeSpokenWordIdx === idx;
+
+          return (
+            <div key={idx} className="flex flex-col items-center">
+              <button
+                type="button"
+                onClick={() => handleTapWord(word, idx)}
+                title={`Chạm để nghe phát âm chậm từ "${word.cleanWord}" (0.7x)`}
+                className={`group relative inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs md:text-sm font-bold transition-all active:scale-95 ${
+                  isCorrect
+                    ? "text-emerald-400 bg-emerald-950/60 border border-emerald-500/40 shadow-sm shadow-emerald-500/10 hover:bg-emerald-900/60"
+                    : "text-rose-400 bg-rose-950/60 border border-rose-500/40 underline decoration-rose-500 decoration-wavy underline-offset-4 hover:bg-rose-900/60"
+                } ${isSpeakingThis ? "ring-2 ring-sky-400 scale-105" : ""}`}
+              >
+                {isCorrect ? (
+                  <Check className="w-3 h-3 text-emerald-400 shrink-0" />
+                ) : (
+                  <Volume2 className="w-3 h-3 text-rose-400/90 shrink-0" />
+                )}
+                <span>{word.originalWord}</span>
+              </button>
+
+              {!isCorrect && word.spokenAs && (
+                <span className="mt-1 px-1.5 py-0.5 rounded bg-rose-950/90 border border-rose-500/30 text-[10px] font-medium text-rose-300/90 leading-tight">
+                  Nghe thành: &ldquo;{word.spokenAs}&rdquo;
+                </span>
+              )}
+
+              {!isCorrect && !word.spokenAs && !isLive && (
+                <span className="mt-1 px-1.5 py-0.5 rounded bg-rose-950/60 text-[10px] font-medium text-rose-400/80 leading-tight">
+                  Bị bỏ sót
+                </span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Helper Note for Tap-to-Pronounce */}
+      <p className="text-[11px] text-slate-300/90 bg-slate-950/70 border border-slate-800/80 rounded-xl px-3 py-2">
+        💡 Chạm vào bất kỳ chữ màu <strong className="text-rose-400">ĐỎ</strong>{" "}
+        nào để nghe máy phát âm chậm lại riêng từ đó (0.7x).
+      </p>
+    </div>
+  );
+}
+
 function StudySessionContent() {
   const searchParams = useSearchParams();
   const deckParam = searchParams.get("deck") || "all";
@@ -99,15 +239,16 @@ function StudySessionContent() {
   const [sessionFinished, setSessionFinished] = useState(false);
   const [reviewedCount, setReviewedCount] = useState(0);
 
-  // Audio & Shadowing states
+  // Audio & Shadowing states (Idle | Listening | Processing | Error)
   const [playingSpeed, setPlayingSpeed] = useState<"normal" | "slow" | null>(
     null
   );
-  const [isListening, setIsListening] = useState(false);
+  const [micState, setMicState] = useState<MicVisualState>("idle");
   const [transcript, setTranscript] = useState("");
-  const [speechResult, setSpeechResult] = useState<SpeechScoreResult | null>(
-    null
-  );
+  const [liveEvaluation, setLiveEvaluation] =
+    useState<PronunciationEvaluationResult | null>(null);
+  const [speechResult, setSpeechResult] =
+    useState<PronunciationEvaluationResult | null>(null);
   const [speechError, setSpeechError] = useState<string | null>(null);
   const recognizerRef = useRef<SpeechRecognizerController | null>(null);
 
@@ -120,8 +261,9 @@ function StudySessionContent() {
       recognizerRef.current.stop();
       recognizerRef.current = null;
     }
-    setIsListening(false);
+    setMicState("idle");
     setTranscript("");
+    setLiveEvaluation(null);
     setSpeechResult(null);
     setSpeechError(null);
   }, []);
@@ -174,44 +316,67 @@ function StudySessionContent() {
     [currentCard]
   );
 
-  const handleToggleShadowing = useCallback(() => {
+  const startShadowingSession = useCallback(() => {
     if (!currentCard) return;
 
-    if (isListening) {
-      recognizerRef.current?.stop();
-      setIsListening(false);
-      return;
-    }
-
+    setPlayingSpeed(null);
     setSpeechError(null);
     setTranscript("");
+    setLiveEvaluation(null);
     setSpeechResult(null);
-    setIsListening(true);
+    setMicState("listening");
 
     const controller = startSpeechRecognition({
+      onStateChange: (nextState) => {
+        setMicState(nextState);
+      },
       onInterimResult: (liveText) => {
         setTranscript(liveText);
+        // Real-time word-by-word green/red evaluation while the user speaks
+        const interimEval = evaluatePronunciation(
+          currentCard.sentence_en,
+          liveText
+        );
+        setLiveEvaluation(interimEval);
       },
       onFinalResult: (finalText) => {
+        setMicState("processing");
         setTranscript(finalText);
-        const evaluation = evaluateSpeechAccuracy(
+        const evaluation = evaluatePronunciation(
           currentCard.sentence_en,
           finalText
         );
+        setLiveEvaluation(null);
         setSpeechResult(evaluation);
-        setIsListening(false);
+        setMicState("idle");
       },
       onError: (errMsg) => {
         setSpeechError(errMsg);
-        setIsListening(false);
+        setMicState("error");
       },
       onEnd: () => {
-        setIsListening(false);
+        setMicState((prev) => (prev === "error" ? "error" : "idle"));
       },
     });
 
     recognizerRef.current = controller;
-  }, [currentCard, isListening]);
+  }, [currentCard]);
+
+  const handleToggleShadowing = useCallback(() => {
+    if (!currentCard) return;
+
+    if (micState === "listening") {
+      setMicState("processing");
+      recognizerRef.current?.stop();
+      return;
+    }
+
+    if (micState === "processing") {
+      return;
+    }
+
+    startShadowingSession();
+  }, [currentCard, micState, startShadowingSession]);
 
   const handleRateCard = useCallback(
     async (rating: SRSRating) => {
@@ -349,6 +514,7 @@ function StudySessionContent() {
 
   const totalCards = studyQueue.length;
   const progressPercent = Math.round(((currentIndex + 1) / totalCards) * 100);
+  const activeEval = speechResult || liveEvaluation;
 
   return (
     <div className="px-4 md:px-8 pt-4 md:pt-8 pb-8 space-y-5">
@@ -559,18 +725,40 @@ function StudySessionContent() {
                       <button
                         type="button"
                         onClick={handleToggleShadowing}
-                        className={`w-full py-3 px-4 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all ${
-                          isListening
-                            ? "bg-rose-600 text-white animate-pulse shadow-lg shadow-rose-600/30"
+                        disabled={micState === "processing"}
+                        className={`relative w-full py-3.5 px-4 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all overflow-hidden ${
+                          micState === "listening"
+                            ? "bg-rose-600 text-white shadow-lg shadow-rose-600/30 ring-2 ring-rose-400/70"
+                            : micState === "processing"
+                            ? "bg-indigo-600 text-white cursor-wait"
+                            : micState === "error"
+                            ? "bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/40"
                             : "bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 shadow-lg shadow-emerald-950/50"
                         }`}
                       >
-                        {isListening ? (
+                        {micState === "listening" && (
                           <>
-                            <MicOff className="w-4 h-4" />
+                            <span className="relative flex h-3 w-3 mr-0.5">
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75" />
+                              <span className="relative inline-flex rounded-full h-3 w-3 bg-white" />
+                            </span>
+                            <MicOff className="w-4 h-4 animate-pulse" />
                             <span>Đang nghe bạn nói... (Bấm để dừng)</span>
                           </>
-                        ) : (
+                        )}
+                        {micState === "processing" && (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            <span>Đang chấm điểm phát âm...</span>
+                          </>
+                        )}
+                        {micState === "error" && (
+                          <>
+                            <AlertTriangle className="w-4 h-4 text-amber-400" />
+                            <span>Bấm để thử lại Micro</span>
+                          </>
+                        )}
+                        {micState === "idle" && (
                           <>
                             <Mic className="w-4 h-4" />
                             <span>Bấm để đọc theo (Shadowing)</span>
@@ -578,61 +766,32 @@ function StudySessionContent() {
                         )}
                       </button>
 
-                      {(isListening || transcript) && (
+                      {(micState === "listening" ||
+                        micState === "processing" ||
+                        transcript) && (
                         <div className="bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-center">
                           <p className="text-[11px] text-slate-400">
                             Giọng của bạn:
                           </p>
                           <p className="text-sm font-medium text-slate-100 mt-0.5">
-                            &ldquo;{transcript || "..."}&rdquo;
+                            &ldquo;{transcript || "Đang lắng nghe..."}&rdquo;
                           </p>
                         </div>
                       )}
 
                       {speechError && (
-                        <p className="text-xs text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-xl p-2.5 text-center">
-                          {speechError}
-                        </p>
+                        <div className="flex items-start gap-2 text-xs text-amber-200 bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 text-left">
+                          <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                          <span>{speechError}</span>
+                        </div>
                       )}
 
-                      {speechResult && (
-                        <div
-                          className={`rounded-xl p-3 border space-y-2 ${
-                            speechResult.level === "excellent"
-                              ? "bg-emerald-500/10 border-emerald-500/30"
-                              : speechResult.level === "good"
-                              ? "bg-amber-500/10 border-amber-500/30"
-                              : "bg-rose-500/10 border-rose-500/30"
-                          }`}
-                        >
-                          <span
-                            className={`text-xs font-extrabold flex items-center gap-1.5 ${
-                              speechResult.level === "excellent"
-                                ? "text-emerald-300"
-                                : speechResult.level === "good"
-                                ? "text-amber-300"
-                                : "text-rose-300"
-                            }`}
-                          >
-                            <CheckCircle2 className="w-4 h-4" />
-                            Độ chuẩn: {speechResult.score}% —{" "}
-                            {speechResult.feedback}
-                          </span>
-                          <div className="flex flex-wrap gap-1.5 pt-1">
-                            {speechResult.wordBreakdown.map((item, idx) => (
-                              <span
-                                key={idx}
-                                className={`text-xs px-2 py-0.5 rounded-md font-medium ${
-                                  item.matched
-                                    ? "bg-emerald-500/20 text-emerald-200 border border-emerald-500/30"
-                                    : "bg-amber-500/25 text-amber-200 border border-amber-400/50 underline decoration-amber-400"
-                                }`}
-                              >
-                                {item.word}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
+                      {activeEval && (
+                        <PronunciationFeedbackPanel
+                          evaluation={activeEval}
+                          isLive={micState === "listening" && !speechResult}
+                          onRetry={startShadowingSession}
+                        />
                       )}
                     </div>
                   </div>
@@ -718,7 +877,7 @@ function StudySessionContent() {
                   <span>Phòng Lab Luyện Nói (Shadowing)</span>
                 </h3>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  Chấm điểm phát âm bằng khoảng cách Levenshtein
+                  Chấm điểm phát âm từng từ bằng thuật toán căn chỉnh chuỗi
                 </p>
               </div>
               <span className="text-[11px] font-mono bg-slate-950 text-slate-300 px-2.5 py-1 rounded-lg border border-slate-800">
@@ -730,7 +889,11 @@ function StudySessionContent() {
               <div className="bg-slate-950/80 border border-slate-800/80 rounded-2xl p-6 text-center space-y-3">
                 <Keyboard className="w-8 h-8 text-sky-400 mx-auto opacity-80" />
                 <p className="text-sm font-semibold text-slate-200">
-                  Hãy tự nói câu tiếng Anh trước rồi bấm <kbd className="px-1.5 py-0.5 bg-slate-800 rounded text-sky-300">Space</kbd> để lật thẻ!
+                  Hãy tự nói câu tiếng Anh trước rồi bấm{" "}
+                  <kbd className="px-1.5 py-0.5 bg-slate-800 rounded text-sky-300">
+                    Space
+                  </kbd>{" "}
+                  để lật thẻ!
                 </p>
                 <p className="text-xs text-slate-400 leading-relaxed">
                   Việc chủ động bật ra câu tiếng Anh trước khi nhìn đáp án giúp
@@ -742,18 +905,40 @@ function StudySessionContent() {
                 <button
                   type="button"
                   onClick={handleToggleShadowing}
+                  disabled={micState === "processing"}
                   className={`w-full py-4 px-5 rounded-2xl font-extrabold text-sm flex items-center justify-center gap-2.5 transition-all ${
-                    isListening
-                      ? "bg-rose-600 text-white animate-pulse shadow-lg shadow-rose-600/30"
+                    micState === "listening"
+                      ? "bg-rose-600 text-white shadow-lg shadow-rose-600/30 ring-2 ring-rose-400/70"
+                      : micState === "processing"
+                      ? "bg-indigo-600 text-white cursor-wait"
+                      : micState === "error"
+                      ? "bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/40"
                       : "bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 shadow-lg shadow-emerald-950/50"
                   }`}
                 >
-                  {isListening ? (
+                  {micState === "listening" && (
                     <>
-                      <MicOff className="w-5 h-5" />
+                      <span className="relative flex h-3 w-3">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75" />
+                        <span className="relative inline-flex rounded-full h-3 w-3 bg-white" />
+                      </span>
+                      <MicOff className="w-5 h-5 animate-pulse" />
                       <span>Đang nghe bạn nói... (Bấm hoặc nhấn M để dừng)</span>
                     </>
-                  ) : (
+                  )}
+                  {micState === "processing" && (
+                    <>
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      <span>Đang phân tích & chấm điểm...</span>
+                    </>
+                  )}
+                  {micState === "error" && (
+                    <>
+                      <AlertTriangle className="w-5 h-5 text-amber-400" />
+                      <span>Thử lại Micro (Phím M)</span>
+                    </>
+                  )}
+                  {micState === "idle" && (
                     <>
                       <Mic className="w-5 h-5" />
                       <span>Bấm để đọc theo (Phím M)</span>
@@ -768,6 +953,10 @@ function StudySessionContent() {
                   <p className="text-sm font-semibold text-white mt-1">
                     {transcript ? (
                       <>&ldquo;{transcript}&rdquo;</>
+                    ) : micState === "listening" ? (
+                      <span className="text-rose-300 animate-pulse">
+                        Đang lắng nghe giọng của bạn...
+                      </span>
                     ) : (
                       <span className="text-slate-500">
                         Chưa có bản thu âm cho thẻ này...
@@ -777,52 +966,18 @@ function StudySessionContent() {
                 </div>
 
                 {speechError && (
-                  <p className="text-xs text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 text-center">
-                    {speechError}
-                  </p>
+                  <div className="flex items-start gap-2.5 text-xs text-amber-200 bg-amber-500/10 border border-amber-500/30 rounded-xl p-3.5 text-left">
+                    <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                    <span>{speechError}</span>
+                  </div>
                 )}
 
-                {speechResult && (
-                  <div
-                    className={`rounded-2xl p-4 border space-y-2.5 ${
-                      speechResult.level === "excellent"
-                        ? "bg-emerald-500/10 border-emerald-500/30"
-                        : speechResult.level === "good"
-                        ? "bg-amber-500/10 border-amber-500/30"
-                        : "bg-rose-500/10 border-rose-500/30"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span
-                        className={`text-sm font-extrabold flex items-center gap-1.5 ${
-                          speechResult.level === "excellent"
-                            ? "text-emerald-300"
-                            : speechResult.level === "good"
-                            ? "text-amber-300"
-                            : "text-rose-300"
-                        }`}
-                      >
-                        <CheckCircle2 className="w-4 h-4" />
-                        Độ chuẩn: {speechResult.score}% —{" "}
-                        {speechResult.feedback}
-                      </span>
-                    </div>
-
-                    <div className="flex flex-wrap gap-1.5 pt-1">
-                      {speechResult.wordBreakdown.map((item, idx) => (
-                        <span
-                          key={idx}
-                          className={`text-xs px-2.5 py-1 rounded-lg font-semibold ${
-                            item.matched
-                              ? "bg-emerald-500/20 text-emerald-200 border border-emerald-500/30"
-                              : "bg-amber-500/25 text-amber-200 border border-amber-400/50 underline decoration-amber-400"
-                          }`}
-                        >
-                          {item.word}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
+                {activeEval && (
+                  <PronunciationFeedbackPanel
+                    evaluation={activeEval}
+                    isLive={micState === "listening" && !speechResult}
+                    onRetry={startShadowingSession}
+                  />
                 )}
               </div>
             )}

@@ -4,6 +4,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Flame,
   Mic,
+  MicOff,
+  Loader2,
+  AlertTriangle,
   Timer,
   Play,
   Trophy,
@@ -11,16 +14,21 @@ import {
   Volume2,
   RotateCcw,
   CheckCircle2,
+  Check,
   XCircle,
   Zap,
 } from "lucide-react";
 import { getCards, recordStudyActivity } from "@/lib/dataService";
 import { Card } from "@/lib/seedData";
 import {
-  evaluateSpeechAccuracy,
+  evaluatePronunciation,
+  MicVisualState,
+  PronunciationEvaluationResult,
   speakEnglish,
+  speakText,
   SpeechRecognizerController,
   startSpeechRecognition,
+  WordEvaluation,
 } from "@/lib/speech";
 
 const TOTAL_DRILL_SECONDS = 60;
@@ -30,8 +38,11 @@ interface DrillHistoryItem {
   card: Card;
   spoken: string;
   score: number;
+  correctCount: number;
+  totalCount: number;
   responseTimeSec: number;
   passed: boolean;
+  words: WordEvaluation[];
 }
 
 function shuffleCards(arr: Card[]): Card[] {
@@ -52,12 +63,17 @@ export default function ReflexDrillPage() {
   const [currentIdx, setCurrentIdx] = useState(0);
 
   const [liveTranscript, setLiveTranscript] = useState("");
+  const [liveEvaluation, setLiveEvaluation] =
+    useState<PronunciationEvaluationResult | null>(null);
   const [lastFeedback, setLastFeedback] = useState<{
     score: number;
+    correctCount: number;
+    totalCount: number;
     passed: boolean;
   } | null>(null);
   const [history, setHistory] = useState<DrillHistoryItem[]>([]);
-  const [micActive, setMicActive] = useState(false);
+  const [micState, setMicState] = useState<MicVisualState>("idle");
+  const [micError, setMicError] = useState<string | null>(null);
 
   const recognizerRef = useRef<SpeechRecognizerController | null>(null);
   const cardStartTimeRef = useRef<number>(Date.now());
@@ -81,7 +97,7 @@ export default function ReflexDrillPage() {
       recognizerRef.current.stop();
       recognizerRef.current = null;
     }
-    setMicActive(false);
+    setMicState("idle");
   }, []);
 
   const finishDrill = useCallback(() => {
@@ -94,6 +110,7 @@ export default function ReflexDrillPage() {
     (spokenText: string, explicitScore?: number) => {
       if (advancingRef.current || status !== "running") return;
       advancingRef.current = true;
+      setMicState("processing");
       stopMic();
 
       const card = drillCards[currentIdx];
@@ -110,26 +127,36 @@ export default function ReflexDrillPage() {
         )
       );
 
-      const evalResult = evaluateSpeechAccuracy(card.sentence_en, spokenText);
+      const evalResult = evaluatePronunciation(card.sentence_en, spokenText);
       const finalScore =
         explicitScore !== undefined ? explicitScore : evalResult.score;
       const passed = finalScore >= 60;
 
-      setLastFeedback({ score: finalScore, passed });
+      setLastFeedback({
+        score: finalScore,
+        correctCount: evalResult.correctCount,
+        totalCount: evalResult.totalCount,
+        passed,
+      });
+
       setHistory((prev) => [
         ...prev,
         {
           card,
           spoken: spokenText || "(Hết giờ 7s)",
           score: finalScore,
+          correctCount: evalResult.correctCount,
+          totalCount: evalResult.totalCount,
           responseTimeSec: elapsedSec,
           passed,
+          words: evalResult.words,
         },
       ]);
 
       setTimeout(() => {
         setLastFeedback(null);
         setLiveTranscript("");
+        setLiveEvaluation(null);
         if (currentIdx + 1 < drillCards.length) {
           setCurrentIdx((prev) => prev + 1);
           setCardTimeLeft(PER_CARD_SECONDS);
@@ -143,22 +170,25 @@ export default function ReflexDrillPage() {
     [currentIdx, drillCards, finishDrill, status, stopMic]
   );
 
-  // Start microphone whenever current card changes during running state
-  useEffect(() => {
+  const startCardMic = useCallback(() => {
     if (status !== "running" || !currentCard || advancingRef.current) return;
 
-    cardStartTimeRef.current = Date.now();
-    setLiveTranscript("");
-    setMicActive(true);
+    setMicError(null);
+    setLiveEvaluation(null);
+    setMicState("listening");
 
     const controller = startSpeechRecognition({
+      onStateChange: (nextState) => {
+        setMicState(nextState);
+      },
       onInterimResult: (interim) => {
         setLiveTranscript(interim);
-        const quickEval = evaluateSpeechAccuracy(
+        const quickEval = evaluatePronunciation(
           currentCard.sentence_en,
           interim
         );
-        if (quickEval.score >= 82) {
+        setLiveEvaluation(quickEval);
+        if (quickEval.score >= 85) {
           advanceToNextCard(interim, quickEval.score);
         }
       },
@@ -166,20 +196,31 @@ export default function ReflexDrillPage() {
         setLiveTranscript(finalStr);
         advanceToNextCard(finalStr);
       },
-      onError: () => {
-        setMicActive(false);
+      onError: (errMsg) => {
+        setMicError(errMsg);
+        setMicState("error");
       },
       onEnd: () => {
-        setMicActive(false);
+        setMicState((prev) => (prev === "error" ? "error" : "idle"));
       },
     });
 
     recognizerRef.current = controller;
+  }, [status, currentCard, advanceToNextCard]);
+
+  // Start microphone whenever current card changes during running state
+  useEffect(() => {
+    if (status !== "running" || !currentCard || advancingRef.current) return;
+
+    cardStartTimeRef.current = Date.now();
+    setLiveTranscript("");
+    setLiveEvaluation(null);
+    startCardMic();
 
     return () => {
-      controller?.stop();
+      recognizerRef.current?.stop();
     };
-  }, [currentIdx, status, currentCard, advanceToNextCard]);
+  }, [currentIdx, status, currentCard, startCardMic]);
 
   // Global 60s & Per-Card 7s Countdown Timer
   useEffect(() => {
@@ -219,9 +260,20 @@ export default function ReflexDrillPage() {
     setGlobalTimeLeft(TOTAL_DRILL_SECONDS);
     setCardTimeLeft(PER_CARD_SECONDS);
     setLiveTranscript("");
+    setLiveEvaluation(null);
     setLastFeedback(null);
+    setMicError(null);
     advancingRef.current = false;
     setStatus("running");
+  }
+
+  function handleManualMicToggle() {
+    if (micState === "listening") {
+      setMicState("processing");
+      recognizerRef.current?.stop();
+    } else {
+      startCardMic();
+    }
   }
 
   const passedCount = history.filter((h) => h.passed).length;
@@ -297,9 +349,9 @@ export default function ReflexDrillPage() {
               </p>
             </div>
             <div className="bg-slate-950/80 border border-slate-800/90 rounded-2xl p-4">
-              <p className="text-sm font-bold text-emerald-400">Chấm điểm AI</p>
+              <p className="text-sm font-bold text-emerald-400">Chấm từng từ</p>
               <p className="text-xs text-slate-400 mt-1">
-                Đo tốc độ & độ chuẩn phát âm
+                Báo Xanh/Đỏ & nghe lại từ sai
               </p>
             </div>
           </div>
@@ -367,7 +419,8 @@ export default function ReflexDrillPage() {
                     <XCircle className="w-12 h-12 text-rose-400 mb-2" />
                   )}
                   <p className="text-lg font-extrabold">
-                    {lastFeedback.passed ? "Phản xạ chuẩn!" : "Chưa khớp!"} (
+                    {lastFeedback.passed ? "Phản xạ chuẩn!" : "Chưa khớp!"} — Đúng{" "}
+                    {lastFeedback.correctCount}/{lastFeedback.totalCount} từ (
                     {lastFeedback.score}%)
                   </p>
                 </div>
@@ -388,24 +441,50 @@ export default function ReflexDrillPage() {
                 </div>
               </div>
 
-              {/* Active Mic Visualizer */}
-              <div className="flex flex-col items-center justify-center py-3 space-y-3">
-                <div className="relative flex items-center justify-center">
-                  {micActive && (
-                    <div className="w-20 h-20 rounded-full bg-amber-500/20 absolute animate-pulse-ring" />
+              {/* Active Mic Visualizer (Idle / Listening / Processing / Error) */}
+              <div className="flex flex-col items-center justify-center py-2 space-y-3">
+                <button
+                  type="button"
+                  onClick={handleManualMicToggle}
+                  aria-label="Điều khiển Micro"
+                  className="relative flex items-center justify-center focus:outline-none group"
+                >
+                  {micState === "listening" && (
+                    <div className="w-20 h-20 rounded-full bg-rose-500/30 absolute animate-ping" />
                   )}
                   <div
                     className={`w-16 h-16 rounded-full flex items-center justify-center border-2 transition-all ${
-                      micActive
-                        ? "bg-amber-500 text-slate-950 border-amber-300 shadow-lg shadow-amber-500/40"
-                        : "bg-slate-800 text-slate-300 border-slate-700"
+                      micState === "listening"
+                        ? "bg-rose-600 text-white border-rose-300 shadow-lg shadow-rose-500/40"
+                        : micState === "processing"
+                        ? "bg-indigo-600 text-white border-indigo-300"
+                        : micState === "error"
+                        ? "bg-amber-500/20 text-amber-300 border-amber-400"
+                        : "bg-slate-800 text-slate-200 border-slate-700 group-hover:border-amber-400"
                     }`}
                   >
-                    <Mic className="w-7 h-7" />
+                    {micState === "listening" && (
+                      <Mic className="w-7 h-7 animate-pulse" />
+                    )}
+                    {micState === "processing" && (
+                      <Loader2 className="w-7 h-7 animate-spin" />
+                    )}
+                    {micState === "error" && (
+                      <AlertTriangle className="w-7 h-7 text-amber-400" />
+                    )}
+                    {micState === "idle" && <MicOff className="w-7 h-7" />}
                   </div>
-                </div>
+                </button>
 
-                <div className="min-h-[48px] w-full bg-slate-950/90 border border-slate-800 rounded-xl p-3 text-center">
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                  {micState === "listening" &&
+                    "Đang nghe... (Chạm biểu tượng Mic nếu muốn dừng sớm)"}
+                  {micState === "processing" && "Đang chấm điểm phát âm..."}
+                  {micState === "error" && "Chạm vào biểu tượng Mic để bật lại"}
+                  {micState === "idle" && "Chạm vào Mic để bắt đầu nói"}
+                </span>
+
+                <div className="min-h-[48px] w-full bg-slate-950/90 border border-slate-800 rounded-xl p-3 text-center space-y-2">
                   <p className="text-xs md:text-sm text-slate-300 font-medium">
                     {liveTranscript ? (
                       <>&ldquo;{liveTranscript}&rdquo;</>
@@ -415,7 +494,32 @@ export default function ReflexDrillPage() {
                       </span>
                     )}
                   </p>
+
+                  {/* Real-time Green/Red Word Badges while speaking */}
+                  {liveEvaluation && (
+                    <div className="flex flex-wrap items-center justify-center gap-1.5 pt-1 border-t border-slate-800/80">
+                      {liveEvaluation.words.map((w, idx) => (
+                        <span
+                          key={idx}
+                          className={`text-xs px-2 py-0.5 rounded-lg font-bold ${
+                            w.status === "correct"
+                              ? "text-emerald-400 bg-emerald-950/60 border border-emerald-500/40"
+                              : "text-rose-400 bg-rose-950/60 border border-rose-500/40 underline decoration-rose-500 decoration-wavy"
+                          }`}
+                        >
+                          {w.originalWord}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
+
+                {micError && (
+                  <div className="w-full flex items-start gap-2 text-xs text-amber-200 bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 text-left">
+                    <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                    <span>{micError}</span>
+                  </div>
+                )}
               </div>
 
               {/* Quick Controls */}
@@ -423,7 +527,7 @@ export default function ReflexDrillPage() {
                 <button
                   type="button"
                   onClick={() =>
-                    advanceToNextCard(currentCard.sentence_en, 95)
+                    advanceToNextCard(currentCard.sentence_en, 100)
                   }
                   className="py-3 px-3 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 text-xs md:text-sm font-bold flex items-center justify-center gap-1.5"
                 >
@@ -467,7 +571,7 @@ export default function ReflexDrillPage() {
         </div>
       )}
 
-      {/* STATE 3: FINISHED SUMMARY & REFLEX SCORE */}
+      {/* STATE 3: FINISHED SUMMARY & INTERACTIVE WORD-BY-WORD CORRECTION */}
       {status === "finished" && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
           <div className="lg:col-span-5 rounded-3xl bg-gradient-to-b from-slate-900 to-slate-950 border border-slate-800 p-6 text-center space-y-5 shadow-2xl">
@@ -515,46 +619,94 @@ export default function ReflexDrillPage() {
             </button>
           </div>
 
-          {/* Detailed Breakdown */}
+          {/* Detailed Word-by-Word Breakdown with Tap-to-Pronounce */}
           <div className="lg:col-span-7 space-y-3">
-            <h3 className="text-sm md:text-base font-bold text-white">
-              Chi tiết các câu vừa phản xạ ({history.length})
-            </h3>
-            <div className="space-y-2.5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <h3 className="text-sm md:text-base font-bold text-white">
+                Chi tiết các câu vừa phản xạ ({history.length})
+              </h3>
+              <span className="text-xs text-slate-300 bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-xl">
+                💡 Chạm vào bất kỳ chữ màu{" "}
+                <strong className="text-rose-400">ĐỎ</strong> nào để nghe máy
+                phát âm chậm lại riêng từ đó.
+              </span>
+            </div>
+
+            <div className="space-y-3">
               {history.map((item, idx) => (
                 <div
                   key={idx}
-                  className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 space-y-2"
+                  className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 space-y-3"
                 >
                   <div className="flex items-start justify-between gap-2">
-                    <div>
+                    <div className="space-y-2 flex-1">
                       <p className="text-xs text-slate-400">
                         {item.card.sentence_vi}
                       </p>
-                      <p className="text-sm md:text-base font-bold text-white mt-0.5">
-                        {item.card.sentence_en}
-                      </p>
+
+                      {/* Interactive Green/Red Word Badges */}
+                      <div className="flex flex-wrap items-start gap-2 pt-0.5">
+                        {item.words.map((wb, wIdx) => {
+                          const isCorrect = wb.status === "correct";
+                          return (
+                            <div
+                              key={wIdx}
+                              className="flex flex-col items-center"
+                            >
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  speakText(wb.cleanWord || wb.originalWord, 0.7)
+                                }
+                                title={`Chạm để nghe phát âm chậm từ "${wb.cleanWord}" (0.7x)`}
+                                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs md:text-sm font-bold transition-all active:scale-95 ${
+                                  isCorrect
+                                    ? "text-emerald-400 bg-emerald-950/60 border border-emerald-500/40 hover:bg-emerald-900/60"
+                                    : "text-rose-400 bg-rose-950/60 border border-rose-500/40 underline decoration-rose-500 decoration-wavy underline-offset-4 hover:bg-rose-900/60"
+                                }`}
+                              >
+                                {isCorrect ? (
+                                  <Check className="w-3 h-3 text-emerald-400 shrink-0" />
+                                ) : (
+                                  <Volume2 className="w-3 h-3 text-rose-400 shrink-0" />
+                                )}
+                                <span>{wb.originalWord}</span>
+                              </button>
+
+                              {!isCorrect && wb.spokenAs && (
+                                <span className="mt-1 px-1.5 py-0.5 rounded bg-rose-950/90 border border-rose-500/30 text-[10px] font-medium text-rose-300/90 leading-tight">
+                                  Nghe thành: &ldquo;{wb.spokenAs}&rdquo;
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
+
                     <button
                       type="button"
                       onClick={() => speakEnglish(item.card.sentence_en, 1.0)}
-                      className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-sky-400 shrink-0"
-                      title="Nghe phát âm chuẩn"
+                      className="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-sky-400 shrink-0"
+                      title="Nghe phát âm cả câu (1x)"
                     >
                       <Volume2 className="w-4 h-4" />
                     </button>
                   </div>
 
-                  <div className="flex items-center justify-between text-xs pt-1.5 border-t border-slate-800/80">
-                    <span className="text-slate-400 truncate max-w-[65%]">
+                  <div className="flex items-center justify-between text-xs pt-2 border-t border-slate-800/80">
+                    <span className="text-slate-400 truncate max-w-[60%]">
                       Bạn nói: <em className="text-slate-200">{item.spoken}</em>
                     </span>
                     <span
-                      className={`font-bold ${
-                        item.passed ? "text-emerald-400" : "text-amber-400"
+                      className={`font-extrabold px-2.5 py-0.5 rounded-lg border ${
+                        item.passed
+                          ? "text-emerald-400 bg-emerald-500/10 border-emerald-500/30"
+                          : "text-rose-400 bg-rose-500/10 border-rose-500/30"
                       }`}
                     >
-                      {item.score}% ({item.responseTimeSec}s)
+                      Đúng {item.correctCount}/{item.totalCount} từ (
+                      {item.score}% • {item.responseTimeSec}s)
                     </span>
                   </div>
                 </div>

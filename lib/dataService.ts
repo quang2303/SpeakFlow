@@ -394,6 +394,21 @@ function ensureLocalSeed(): { decks: Deck[]; cards: Card[] } {
     if (!Array.isArray(decks) || decks.length === 0) {
       decks = SEED_DECKS;
       window.localStorage.setItem(STORAGE_KEYS.DECKS, JSON.stringify(decks));
+    } else {
+      // Sync deck titles/descriptions from SEED_DECKS if updated
+      const seedDeckMap = new Map(SEED_DECKS.map((d) => [d.id, d]));
+      let decksChanged = false;
+      decks = decks.map((d) => {
+        const seedDeck = seedDeckMap.get(d.id);
+        if (seedDeck && (d.title !== seedDeck.title || d.description !== seedDeck.description)) {
+          decksChanged = true;
+          return { ...d, title: seedDeck.title, description: seedDeck.description };
+        }
+        return d;
+      });
+      if (decksChanged) {
+        window.localStorage.setItem(STORAGE_KEYS.DECKS, JSON.stringify(decks));
+      }
     }
   } catch {
     decks = SEED_DECKS;
@@ -408,6 +423,14 @@ function ensureLocalSeed(): { decks: Deck[]; cards: Card[] } {
     if (!Array.isArray(cards) || cards.length === 0) {
       cards = SEED_CARDS;
       window.localStorage.setItem(STORAGE_KEYS.CARDS, JSON.stringify(cards));
+    } else {
+      // Auto-merge any newly added SEED_CARDS while preserving existing SRS progress
+      const existingIds = new Set(cards.map((c) => c.id));
+      const missingSeedCards = SEED_CARDS.filter((sc) => !existingIds.has(sc.id));
+      if (missingSeedCards.length > 0) {
+        cards = [...cards, ...missingSeedCards];
+        window.localStorage.setItem(STORAGE_KEYS.CARDS, JSON.stringify(cards));
+      }
     }
   } catch {
     cards = SEED_CARDS;
@@ -466,14 +489,40 @@ export async function getCards(deckId?: string): Promise<Card[]> {
       if (!error && data) {
         let baseCards: Card[] = data as Card[];
 
-        if (baseCards.length === 0 && !deckId) {
+        if (!deckId && baseCards.length < SEED_CARDS.length) {
           await supabase.from("decks").upsert(SEED_DECKS, { onConflict: "id" });
-          const { data: seededCards, error: seedErr } = await supabase
-            .from("cards")
-            .upsert(SEED_CARDS, { onConflict: "id" })
-            .select("*");
-          if (!seedErr && seededCards && seededCards.length > 0) {
-            baseCards = seededCards as Card[];
+          const existingIds = new Set(baseCards.map((c) => c.id));
+          const missingSeedCards = SEED_CARDS.filter(
+            (sc) => !existingIds.has(sc.id)
+          );
+          if (missingSeedCards.length > 0) {
+            const { data: insertedCards, error: seedErr } = await supabase
+              .from("cards")
+              .upsert(missingSeedCards, { onConflict: "id" })
+              .select("*");
+            if (!seedErr && insertedCards && insertedCards.length > 0) {
+              baseCards = [...baseCards, ...(insertedCards as Card[])];
+            }
+          }
+        } else if (deckId) {
+          const expectedSeedForDeck = SEED_CARDS.filter(
+            (sc) => sc.deck_id === deckId
+          );
+          const existingIds = new Set(baseCards.map((c) => c.id));
+          const missingForDeck = expectedSeedForDeck.filter(
+            (sc) => !existingIds.has(sc.id)
+          );
+          if (missingForDeck.length > 0) {
+            await supabase
+              .from("decks")
+              .upsert(SEED_DECKS, { onConflict: "id" });
+            const { data: insertedDeckCards, error: seedErr } = await supabase
+              .from("cards")
+              .upsert(missingForDeck, { onConflict: "id" })
+              .select("*");
+            if (!seedErr && insertedDeckCards && insertedDeckCards.length > 0) {
+              baseCards = [...baseCards, ...(insertedDeckCards as Card[])];
+            }
           }
         }
 
