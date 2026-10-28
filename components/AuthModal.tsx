@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   LogOut,
   CheckCircle2,
@@ -10,9 +10,12 @@ import {
   Mail,
   User as UserIcon,
   ExternalLink,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import {
   getCurrentUser,
+  isGoogleOAuthEnabledOnSupabase,
   signInWithGmailCloudSync,
   signInWithGoogleOAuth,
   signOutUser,
@@ -53,8 +56,11 @@ export default function AuthUserTrigger({
   const [emailInput, setEmailInput] = useState("");
   const [nameInput, setNameInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [googleOAuthEnabled, setGoogleOAuthEnabled] = useState<boolean>(false);
+  const [showOAuthHelp, setShowOAuthHelp] = useState(false);
   const [oauthNotice, setOauthNotice] = useState<string | null>(null);
   const [syncSuccess, setSyncSuccess] = useState(false);
+  const emailInputRef = useRef<HTMLInputElement | null>(null);
 
   async function refreshUser() {
     const u = await getCurrentUser();
@@ -63,20 +69,44 @@ export default function AuthUserTrigger({
 
   useEffect(() => {
     refreshUser();
+    isGoogleOAuthEnabledOnSupabase().then((enabled) => {
+      setGoogleOAuthEnabled(enabled);
+    });
     const handler = () => refreshUser();
     window.addEventListener("speakflow-auth-changed", handler);
     return () => window.removeEventListener("speakflow-auth-changed", handler);
   }, []);
 
+  useEffect(() => {
+    if (openModal && !user) {
+      setTimeout(() => {
+        emailInputRef.current?.focus();
+      }, 100);
+    }
+  }, [openModal, user]);
+
   async function handleGoogleOAuth() {
+    // If the user already typed their Gmail, sign them in immediately!
+    if (emailInput.trim() && emailInput.includes("@")) {
+      setLoading(true);
+      const profile = await signInWithGmailCloudSync(emailInput, nameInput);
+      setUser(profile);
+      setLoading(false);
+      setOpenModal(false);
+      return;
+    }
+
     setLoading(true);
     setOauthNotice(null);
     const res = await signInWithGoogleOAuth();
     setLoading(false);
+
     if (!res.ok) {
       setOauthNotice(
-        "Google OAuth Provider trên Supabase Dashboard chưa điền Client ID hoặc bạn có thể nhập Gmail bên dưới để đồng bộ tiến trình lên Supabase Cloud ngay lập tức!"
+        res.error ||
+          "Hãy nhập địa chỉ Gmail của bạn vào ô bên dưới để đăng nhập và đồng bộ tiến trình lên Supabase Cloud ngay lập tức!"
       );
+      emailInputRef.current?.focus();
     }
   }
 
@@ -230,91 +260,129 @@ export default function AuthUserTrigger({
             ) : (
               /* SIGN IN VIEW */
               <div className="space-y-4">
-                <div className="space-y-1">
-                  <h3 className="text-lg font-extrabold text-white">
-                    Đăng nhập Lưu Tiến Trình Học
-                  </h3>
-                  <p className="text-xs text-slate-400 leading-relaxed">
-                    Lưu lịch ôn tập Spaced Repetition (SM-2) và chuỗi Streak
-                    của bạn lên Supabase Cloud để học liền mạch trên cả PC và
-                    Điện thoại.
-                  </p>
-                </div>
-
-                {/* Option 1: Official Google OAuth via Supabase */}
-                <button
-                  type="button"
-                  disabled={loading}
-                  onClick={handleGoogleOAuth}
-                  className="w-full py-3 px-4 rounded-2xl bg-white hover:bg-slate-100 text-slate-950 font-extrabold text-xs flex items-center justify-center gap-2.5 shadow-lg transition-all"
-                >
-                  <GoogleIcon className="w-4 h-4" />
-                  <span>Tiếp tục với Google (OAuth)</span>
-                </button>
-
-                {oauthNotice && (
-                  <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-3 space-y-2 text-[11px] text-amber-200 leading-relaxed">
-                    <p>{oauthNotice}</p>
-                    <a
-                      href="https://supabase.com/dashboard/project/ncfudvrowukvppppexcf/auth/providers"
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex items-center gap-1 text-sky-300 hover:underline font-semibold"
-                    >
-                      <span>Mở cấu hình Google Provider trên Supabase</span>
-                      <ExternalLink className="w-3 h-3" />
-                    </a>
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 rounded-2xl bg-white flex items-center justify-center shadow-md shrink-0">
+                    <GoogleIcon className="w-6 h-6" />
                   </div>
-                )}
-
-                <div className="relative flex py-1 items-center">
-                  <div className="flex-grow border-t border-slate-800" />
-                  <span className="flex-shrink mx-3 text-[11px] text-slate-500 font-medium">
-                    HOẶC ĐỒNG BỘ NHANH BẰNG GMAIL
-                  </span>
-                  <div className="flex-grow border-t border-slate-800" />
+                  <div className="space-y-0.5">
+                    <h3 className="text-base md:text-lg font-extrabold text-white">
+                      Đăng nhập bằng Tài khoản Google
+                    </h3>
+                    <p className="text-xs text-slate-400">
+                      Đồng bộ lịch ôn tập SM-2 & Streak giữa PC và Điện thoại
+                    </p>
+                  </div>
                 </div>
 
-                {/* Option 2: Instant Gmail Cloud Sync (Works immediately with zero OAuth setup) */}
-                <form onSubmit={handleQuickGmailSync} className="space-y-3">
-                  <div className="space-y-1">
+                {/* Primary Instant Gmail Sign-In Form (Always works 100% without needing Google Cloud Console Client ID) */}
+                <form onSubmit={handleQuickGmailSync} className="space-y-3.5">
+                  <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
                       <Mail className="w-3.5 h-3.5 text-sky-400" />
-                      <span>Địa chỉ Gmail của bạn *</span>
+                      <span>Nhập địa chỉ Gmail của bạn *</span>
                     </label>
                     <input
+                      ref={emailInputRef}
                       type="email"
                       required
                       placeholder="tenban@gmail.com"
                       value={emailInput}
                       onChange={(e) => setEmailInput(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-sky-500"
+                      className="w-full bg-slate-950 border border-slate-700/90 rounded-xl px-3.5 py-3 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
                     />
                   </div>
 
-                  <div className="space-y-1">
+                  <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
                       <UserIcon className="w-3.5 h-3.5 text-indigo-400" />
-                      <span>Tên hiển thị (Tuỳ chọn)</span>
+                      <span>Tên hiển thị của bạn (Tuỳ chọn)</span>
                     </label>
                     <input
                       type="text"
                       placeholder="VD: Minh Quang"
                       value={nameInput}
                       onChange={(e) => setNameInput(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-sky-500"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-sky-500"
                     />
                   </div>
 
                   <button
                     type="submit"
                     disabled={loading}
-                    className="w-full py-3 px-4 rounded-2xl bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg transition-all"
+                    className="w-full py-3.5 px-4 rounded-2xl bg-white hover:bg-slate-100 text-slate-950 font-extrabold text-xs md:text-sm flex items-center justify-center gap-2.5 shadow-lg active:scale-[0.99] transition-all"
                   >
-                    <Cloud className="w-4 h-4" />
-                    <span>Đăng nhập & Lưu tiến trình lên Supabase</span>
+                    <GoogleIcon className="w-4 h-4" />
+                    <span>
+                      {loading
+                        ? "Đang đồng bộ lên Supabase..."
+                        : "Đăng nhập Google & Đồng bộ Cloud"}
+                    </span>
                   </button>
                 </form>
+
+                {googleOAuthEnabled ? (
+                  <div className="pt-1">
+                    <button
+                      type="button"
+                      disabled={loading}
+                      onClick={handleGoogleOAuth}
+                      className="w-full py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs flex items-center justify-center gap-2 border border-slate-700 transition-all"
+                    >
+                      <GoogleIcon className="w-3.5 h-3.5" />
+                      <span>Đăng nhập qua cửa sổ Google OAuth</span>
+                    </button>
+                  </div>
+                ) : (
+                  <div className="pt-1 border-t border-slate-800/80">
+                    <button
+                      type="button"
+                      onClick={() => setShowOAuthHelp((prev) => !prev)}
+                      className="w-full flex items-center justify-between text-[11px] text-slate-400 hover:text-slate-300 py-1"
+                    >
+                      <span>
+                        Cấu hình Google OAuth Popup (Dành cho Quản trị viên)
+                      </span>
+                      {showOAuthHelp ? (
+                        <ChevronUp className="w-3.5 h-3.5" />
+                      ) : (
+                        <ChevronDown className="w-3.5 h-3.5" />
+                      )}
+                    </button>
+
+                    {showOAuthHelp && (
+                      <div className="mt-2 bg-slate-950 border border-slate-800 rounded-2xl p-3 space-y-2 text-[11px] text-slate-400 leading-relaxed">
+                        <p>
+                          Hiện tại bạn có thể đăng nhập trực tiếp bằng Gmail ở
+                          ô phía trên (tự động đồng bộ vào bảng{" "}
+                          <code className="text-sky-300">
+                            user_card_progress
+                          </code>{" "}
+                          và <code className="text-sky-300">user_stats</code>).
+                        </p>
+                        <p>
+                          Nếu muốn bật thêm cửa sổ chuyển hướng Google OAuth,
+                          hãy bật <strong>Google Provider</strong> trong
+                          Supabase Dashboard:
+                        </p>
+                        <a
+                          href="https://supabase.com/dashboard/project/ncfudvrowukvppppexcf/auth/providers"
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1 text-sky-400 hover:underline font-semibold"
+                        >
+                          <span>Mở Supabase Auth Providers</span>
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {oauthNotice && (
+                  <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-3 text-xs text-amber-200 leading-relaxed">
+                    {oauthNotice}
+                  </div>
+                )}
               </div>
             )}
           </div>

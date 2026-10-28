@@ -197,10 +197,32 @@ export async function getCurrentUser(): Promise<UserProfile | null> {
 }
 
 /**
- * Trigger Supabase Google OAuth Sign-In
+ * Check if Google OAuth provider is enabled on the Supabase project before redirecting
+ * so the browser never navigates to a broken `{"error_code":"validation_failed","msg":"Unsupported provider: provider is not enabled"}` JSON page.
+ */
+export async function isGoogleOAuthEnabledOnSupabase(): Promise<boolean> {
+  const creds = resolveSupabaseCredentials();
+  if (!creds) return false;
+  try {
+    const res = await fetch(`${creds.url}/auth/v1/settings`, {
+      headers: {
+        apikey: creds.key,
+      },
+    });
+    if (!res.ok) return false;
+    const settings = await res.json();
+    return Boolean(settings?.external?.google);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Trigger Supabase Google OAuth Sign-In (only redirects if Google provider is enabled on Supabase)
  */
 export async function signInWithGoogleOAuth(): Promise<{
   ok: boolean;
+  providerDisabled?: boolean;
   error?: string;
 }> {
   const supabase = getSupabaseClient();
@@ -211,13 +233,25 @@ export async function signInWithGoogleOAuth(): Promise<{
     };
   }
 
+  // Pre-check if Google OAuth is enabled on Supabase to prevent raw JSON error page redirect
+  const isGoogleEnabled = await isGoogleOAuthEnabledOnSupabase();
+  if (!isGoogleEnabled) {
+    return {
+      ok: false,
+      providerDisabled: true,
+      error:
+        "Google OAuth chưa được bật trên Supabase Dashboard. Bạn có thể nhập Gmail ngay bên dưới để đăng nhập & đồng bộ trực tiếp lên Supabase Cloud!",
+    };
+  }
+
   try {
     const redirectTo =
       typeof window !== "undefined" ? window.location.origin : undefined;
-    const { error } = await supabase.auth.signInWithOAuth({
+    const { data, error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
         redirectTo,
+        skipBrowserRedirect: true,
         queryParams: {
           access_type: "offline",
           prompt: "consent",
@@ -226,6 +260,9 @@ export async function signInWithGoogleOAuth(): Promise<{
     });
     if (error) {
       return { ok: false, error: error.message };
+    }
+    if (data?.url && typeof window !== "undefined") {
+      window.location.assign(data.url);
     }
     return { ok: true };
   } catch (err) {
