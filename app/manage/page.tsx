@@ -19,13 +19,16 @@ import {
   getActiveStorageMode,
   getCards,
   getDecks,
+  getStoredUserProfile,
   hasSupabaseEnv,
   importCardsBatch,
   isForceLocalMode,
   resetLocalToSeed,
   setForceLocalMode,
   StorageMode,
+  UserProfile,
 } from "@/lib/dataService";
+import AccountLockScreen from "@/components/AccountLockScreen";
 import { Card, Deck } from "@/lib/seedData";
 import { speakEnglish } from "@/lib/speech";
 
@@ -86,6 +89,7 @@ function parseCsvBatch(csvText: string) {
 }
 
 export default function ManageCardsPage() {
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [decks, setDecks] = useState<Deck[]>([]);
   const [cards, setCards] = useState<Card[]>([]);
   const [storageMode, setStorageMode] = useState<StorageMode>("local");
@@ -129,8 +133,14 @@ export default function ManageCardsPage() {
   }
 
   useEffect(() => {
+    setCurrentUser(getStoredUserProfile());
     refreshData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const handler = () => {
+      setCurrentUser(getStoredUserProfile());
+      refreshData();
+    };
+    window.addEventListener("speakflow-auth-changed", handler);
+    return () => window.removeEventListener("speakflow-auth-changed", handler);
   }, []);
 
   function showToast(msg: string) {
@@ -241,6 +251,10 @@ export default function ManageCardsPage() {
       c.meaning_vi.toLowerCase().includes(q)
     );
   });
+
+  if (currentUser?.status === "locked") {
+    return <AccountLockScreen user={currentUser} />;
+  }
 
   return (
     <div className="px-4 md:px-8 pt-5 md:pt-8 pb-8 space-y-6">

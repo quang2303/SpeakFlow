@@ -26,6 +26,7 @@ import {
   ArrowUpDown,
   GraduationCap,
   Shield,
+  ShieldAlert,
 } from "lucide-react";
 import {
   AdminStudentMetrics,
@@ -33,7 +34,6 @@ import {
   deleteUserAccountByAdmin,
   getAllUsersForAdmin,
   getStoredUserProfile,
-  loginWithDemoAccount,
   resetUserProgressByAdmin,
   toggleUserAccountRole,
   toggleUserAccountStatus,
@@ -42,6 +42,7 @@ import {
 } from "@/lib/dataService";
 import { UserAvatar } from "@/components/AuthModal";
 import StudentDetailModal from "@/components/admin/StudentDetailModal";
+import AccountLockScreen from "@/components/AccountLockScreen";
 
 type FilterOption =
   | "all"
@@ -114,13 +115,19 @@ export default function AdminDashboardPage() {
       setIsRefreshing(true);
       setTimeout(() => setIsRefreshing(false), 450);
     }
-    setCurrentUser(getStoredUserProfile());
-    const data = getAllUsersForAdmin();
-    setStudents(data);
-    setSelectedStudent((prev) => {
-      if (!prev) return null;
-      return data.find((s) => s.profile.id === prev.profile.id) || null;
-    });
+    const user = getStoredUserProfile();
+    setCurrentUser(user);
+    if (user?.role === "admin") {
+      const data = getAllUsersForAdmin();
+      setStudents(data);
+      setSelectedStudent((prev) => {
+        if (!prev) return null;
+        return data.find((s) => s.profile.id === prev.profile.id) || null;
+      });
+    } else {
+      setStudents([]);
+      setSelectedStudent(null);
+    }
   }
 
   useEffect(() => {
@@ -343,6 +350,53 @@ export default function AdminDashboardPage() {
     showToast("📥 Đã xuất báo cáo Excel (CSV chuẩn UTF-8 BOM) thành công!");
   }
 
+  if (currentUser?.status === "locked") {
+    return <AccountLockScreen user={currentUser} />;
+  }
+
+  // 403 Forbidden Route Guard: Only role === "admin" is allowed to view the admin portal
+  if (!currentUser || currentUser.role !== "admin") {
+    return (
+      <div className="max-w-xl mx-auto px-4 py-16 md:py-24 text-center space-y-6">
+        <div className="w-16 h-16 rounded-3xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center mx-auto shadow-xl shadow-rose-950/40">
+          <ShieldAlert className="w-8 h-8 text-rose-400" />
+        </div>
+
+        <div className="space-y-2">
+          <span className="text-[11px] font-extrabold uppercase tracking-wider text-rose-400 px-3 py-1 rounded-full bg-rose-500/10 border border-rose-500/30">
+            403 Forbidden • Quyền truy cập bị từ chối
+          </span>
+          <h1 className="text-xl md:text-2xl font-extrabold text-white">
+            Khu vực Quản trị viên (Admin)
+          </h1>
+          <p className="text-xs md:text-sm text-slate-300 max-w-md mx-auto leading-relaxed">
+            {currentUser
+              ? `Tài khoản "${currentUser.full_name}" (${currentUser.email}) hiện là Học viên và không có quyền truy cập Bảng Quản trị hệ thống.`
+              : "Bạn cần đăng nhập bằng tài khoản Quản trị viên để có thể xem và quản lý danh sách học viên."}
+          </p>
+        </div>
+
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+          <Link
+            href="/login"
+            className="w-full sm:w-auto px-5 py-3 rounded-2xl bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white font-extrabold text-xs md:text-sm flex items-center justify-center gap-2 shadow-lg shadow-indigo-950/60 transition-all"
+          >
+            <Lock className="w-4 h-4" />
+            <span>Đăng nhập tài khoản Quản trị</span>
+          </Link>
+
+          <Link
+            href="/"
+            className="w-full sm:w-auto px-5 py-3 rounded-2xl bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 font-bold text-xs md:text-sm flex items-center justify-center gap-2 transition-all"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <span>Quay về Trang chủ</span>
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-7xl mx-auto px-4 py-6 space-y-6">
       {/* Toast Notification Banner */}
@@ -423,28 +477,6 @@ export default function AdminDashboardPage() {
           </button>
         </div>
       </div>
-
-      {/* Helper banner if current user is not logged in as Admin */}
-      {currentUser?.role !== "admin" && (
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 py-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-200">
-          <span>
-            💡 Bạn đang xem trang Quản trị bằng tài khoản{" "}
-            <strong>{currentUser?.full_name || "Khách"}</strong>. Bạn có thể
-            chuyển sang tài khoản Admin Demo bất cứ lúc nào.
-          </span>
-          <button
-            type="button"
-            onClick={() => {
-              void loginWithDemoAccount("admin@speakflow.vn").then(() =>
-                refreshDashboardData(false)
-              );
-            }}
-            className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold shrink-0"
-          >
-            ⚡ Đăng nhập quyền Admin
-          </button>
-        </div>
-      )}
 
       {/* ==================================================================== */}
       {/* 1B. EXECUTIVE KPI SUMMARY CARDS (4 CARDS)                            */}
