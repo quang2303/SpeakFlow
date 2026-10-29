@@ -1,4 +1,4 @@
-import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import { createClient, SupabaseClient, User } from "@supabase/supabase-js";
 import { Card, Deck, SEED_CARDS, SEED_DECKS } from "./seedData";
 import { calculateNextSRS, isCardDue, SRSRating } from "./srs";
 
@@ -21,16 +21,95 @@ export interface StreakData {
 }
 
 export interface UserProfile {
-  id: string; // UUID
+  id: string; // UUID from Supabase Google Auth
   email: string;
   full_name: string;
   avatar_url?: string;
-  provider: "google" | "cloud";
+  provider: "google";
+  last_synced_at?: string;
+}
+
+export interface AccountProgressSummary {
+  totalCards: number;
+  practicedCards: number;
+  masteredCards: number;
+  dueCards: number;
+  currentStreak: number;
+  todayReviewedCount: number;
+  lastStudyDate: string | null;
+  lastSyncedAt: string | null;
 }
 
 export type StorageMode = "supabase" | "local";
 
 let supabaseInstance: SupabaseClient | null = null;
+let authListenerInitialized = false;
+let activeSyncPromise: Promise<void> | null = null;
+let activeGetUserPromise: Promise<UserProfile | null> | null = null;
+let lastSyncedUserId: string | null = null;
+let urlOAuthConsumed = false;
+let pendingOAuthTokens: {
+  accessToken?: string;
+  refreshToken?: string;
+  code?: string;
+} | null = null;
+let cachedGoogleOAuthEnabled: boolean | null = null;
+let lastNotifiedStateHash = "";
+
+const SUPABASE_AUTH_STORAGE_KEY = "speakflow_supabase_auth_v1";
+const JUST_LOGGED_IN_KEY = "speakflow_just_logged_in_v1";
+
+function notifyAuthChangedThrottled(stateSignature: string): void {
+  if (typeof window === "undefined") return;
+  if (stateSignature === lastNotifiedStateHash) return;
+  lastNotifiedStateHash = stateSignature;
+  window.dispatchEvent(new Event("speakflow-auth-changed"));
+}
+
+export function consumeJustLoggedInFlag(): boolean {
+  if (typeof window === "undefined") return false;
+  const val = window.sessionStorage.getItem(JUST_LOGGED_IN_KEY);
+  if (val === "true") {
+    window.sessionStorage.removeItem(JUST_LOGGED_IN_KEY);
+    return true;
+  }
+  return false;
+}
+
+function markJustLoggedIn(): void {
+  if (typeof window === "undefined") return;
+  window.sessionStorage.setItem(JUST_LOGGED_IN_KEY, "true");
+}
+
+/**
+ * Decode a JWT payload safely with UTF-8 support (for Google OAuth access_token hash)
+ */
+function decodeJwtPayload(token: string): Record<string, unknown> | null {
+  try {
+    const parts = token.split(".");
+    if (parts.length < 2) return null;
+    const base64Url = parts[1];
+    const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = base64.padEnd(
+      base64.length + ((4 - (base64.length % 4)) % 4),
+      "="
+    );
+    const binary = window.atob(padded);
+    const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
+    const jsonStr = new TextDecoder("utf-8").decode(bytes);
+    return JSON.parse(jsonStr);
+  } catch {
+    return null;
+  }
+}
+
+export function getSupabaseProjectUrl(): string {
+  return resolveSupabaseCredentials()?.url || DEFAULT_SUPABASE_URL;
+}
+
+export function getSupabaseCallbackUrl(): string {
+  return `${getSupabaseProjectUrl()}/auth/v1/callback`;
+}
 
 function resolveSupabaseCredentials(): { url: string; key: string } | null {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || DEFAULT_SUPABASE_URL;
@@ -51,8 +130,8 @@ function resolveSupabaseCredentials(): { url: string; key: string } | null {
 }
 
 /**
- * Generate a deterministic UUID from an email string so the same Gmail
- * maps to the exact same UUID across PC and Mobile devices.
+ * Legacy deterministic UUID helper (used to migrate any earlier email-only progress
+ * into the user's real Google OAuth account UUID upon login)
  */
 export function emailToDeterministicUuid(email: string): string {
   const clean = email.trim().toLowerCase();
@@ -98,6 +177,128 @@ export function hasSupabaseEnv(): boolean {
   return resolveSupabaseCredentials() !== null;
 }
 
+function mapSupabaseAuthUserToProfile(
+  u: User,
+  existingProfile?: UserProfile | null
+): UserProfile {
+  const meta = u.user_metadata || {};
+  const email = u.email || meta.email || existingProfile?.email || "";
+  const fullName =
+    meta.full_name ||
+    meta.name ||
+    existingProfile?.full_name ||
+    email.split("@")[0] ||
+    "Học viên SpeakFlow";
+  const avatarUrl =
+    meta.avatar_url ||
+    meta.picture ||
+    existingProfile?.avatar_url ||
+    undefined;
+
+  return {
+    id: u.id,
+    email,
+    full_name: fullName,
+    avatar_url: avatarUrl,
+    provider: "google",
+    last_synced_at:
+      existingProfile?.last_synced_at || new Date().toISOString(),
+  };
+}
+
+function consumeUrlOAuthOnce(): void {
+  if (urlOAuthConsumed || typeof window === "undefined") return;
+  urlOAuthConsumed = true;
+
+  try {
+    const hasHashToken =
+      window.location.hash && window.location.hash.includes("access_token=");
+    const hasQueryCode =
+      window.location.search && window.location.search.includes("code=");
+
+    if (hasHashToken) {
+      const hashParams = new URLSearchParams(
+        window.location.hash.replace(/^#/, "")
+      );
+      const accessToken = hashParams.get("access_token") || undefined;
+      const refreshToken = hashParams.get("refresh_token") || undefined;
+
+      // Strip hash IMMEDIATELY and synchronously so it can never be processed twice
+      const cleanUrl =
+        window.location.pathname === "/auth/callback"
+          ? "/"
+          : window.location.pathname + window.location.search;
+      window.history.replaceState({}, document.title, cleanUrl || "/");
+
+      if (accessToken) {
+        pendingOAuthTokens = { accessToken, refreshToken };
+        const fastProfile = parseProfileFromJwtAccessToken(accessToken);
+        if (fastProfile) {
+          markJustLoggedIn();
+          window.localStorage.setItem(
+            STORAGE_KEYS.USER_PROFILE,
+            JSON.stringify(fastProfile)
+          );
+        }
+      }
+    } else if (hasQueryCode) {
+      const params = new URLSearchParams(window.location.search);
+      const code = params.get("code") || undefined;
+
+      // Strip code IMMEDIATELY and synchronously so it can never be processed twice
+      const cleanUrl =
+        window.location.pathname === "/auth/callback"
+          ? "/"
+          : window.location.pathname +
+            window.location.search
+              .replace(/[?&]code=[^&]+/, "")
+              .replace(/^&/, "?");
+      window.history.replaceState({}, document.title, cleanUrl || "/");
+
+      if (code) {
+        pendingOAuthTokens = { code };
+        markJustLoggedIn();
+      }
+    }
+  } catch {
+    // Ignore URL parse errors
+  }
+}
+
+function initSupabaseAuthListener(client: SupabaseClient) {
+  if (authListenerInitialized || typeof window === "undefined") return;
+  authListenerInitialized = true;
+
+  // IMPORTANT: Never make onAuthStateChange async or await Supabase queries inside it,
+  // because @supabase/gotrue-js holds an internal auth lock while awaiting subscribers.
+  client.auth.onAuthStateChange((event, session) => {
+    if (
+      (event === "SIGNED_IN" ||
+        event === "INITIAL_SESSION" ||
+        event === "TOKEN_REFRESHED" ||
+        event === "USER_UPDATED") &&
+      session?.user
+    ) {
+      const existing = getStoredUserProfile();
+      const profile = mapSupabaseAuthUserToProfile(session.user, existing);
+      if (event === "SIGNED_IN") {
+        markJustLoggedIn();
+      }
+      saveStoredUserProfile(profile, true);
+
+      if (lastSyncedUserId !== profile.id) {
+        lastSyncedUserId = profile.id;
+        setTimeout(() => {
+          void syncUserProgressWithCloud(profile);
+        }, 0);
+      }
+    } else if (event === "SIGNED_OUT") {
+      lastSyncedUserId = null;
+      saveStoredUserProfile(null, true);
+    }
+  });
+}
+
 /**
  * Get or initialize the Supabase client if configured and not forced to local mode
  */
@@ -106,13 +307,23 @@ export function getSupabaseClient(): SupabaseClient | null {
   if (!creds) return null;
 
   if (typeof window !== "undefined") {
+    consumeUrlOAuthOnce();
     const forceLocal = window.localStorage.getItem(STORAGE_KEYS.FORCE_LOCAL);
     if (forceLocal === "true") return null;
   }
 
   if (!supabaseInstance) {
-    supabaseInstance = createClient(creds.url, creds.key);
+    supabaseInstance = createClient(creds.url, creds.key, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: false,
+        storageKey: SUPABASE_AUTH_STORAGE_KEY,
+      },
+    });
   }
+
+  initSupabaseAuthListener(supabaseInstance);
   return supabaseInstance;
 }
 
@@ -126,7 +337,7 @@ export function setForceLocalMode(forceLocal: boolean): void {
     STORAGE_KEYS.FORCE_LOCAL,
     forceLocal ? "true" : "false"
   );
-  window.dispatchEvent(new Event("speakflow-auth-changed"));
+  notifyAuthChangedThrottled(`force_local:${forceLocal}:${Date.now()}`);
 }
 
 export function isForceLocalMode(): boolean {
@@ -135,72 +346,211 @@ export function isForceLocalMode(): boolean {
 }
 
 // ============================================================================
-// GOOGLE AUTH & CLOUD USER PROFILE MANAGEMENT
+// GOOGLE OAUTH & CLOUD USER PROFILE MANAGEMENT
 // ============================================================================
+
+function parseProfileFromJwtAccessToken(accessToken: string): UserProfile | null {
+  const payload = decodeJwtPayload(accessToken);
+  if (!payload || typeof payload.sub !== "string") return null;
+
+  const meta =
+    (payload.user_metadata as Record<string, unknown> | undefined) || {};
+  const email =
+    (typeof payload.email === "string" && payload.email) ||
+    (typeof meta.email === "string" && meta.email) ||
+    "";
+  if (!email) return null;
+
+  const fullName =
+    (typeof meta.full_name === "string" && meta.full_name) ||
+    (typeof meta.name === "string" && meta.name) ||
+    email.split("@")[0] ||
+    "Học viên SpeakFlow";
+  const avatarUrl =
+    (typeof meta.avatar_url === "string" && meta.avatar_url) ||
+    (typeof meta.picture === "string" && meta.picture) ||
+    undefined;
+
+  return {
+    id: payload.sub,
+    email,
+    full_name: fullName,
+    avatar_url: avatarUrl,
+    provider: "google",
+    last_synced_at: new Date().toISOString(),
+  };
+}
 
 export function getStoredUserProfile(): UserProfile | null {
   if (typeof window === "undefined") return null;
+
+  consumeUrlOAuthOnce();
+
+  // 1. Check our stored user profile
   try {
     const raw = window.localStorage.getItem(STORAGE_KEYS.USER_PROFILE);
-    if (!raw) return null;
-    return JSON.parse(raw) as UserProfile;
+    if (raw) {
+      const parsed = JSON.parse(raw) as UserProfile;
+      if (parsed && parsed.id && parsed.email) {
+        return parsed;
+      }
+    }
   } catch {
-    return null;
+    // Ignore
   }
+
+  // 2. Fallback: check Supabase Auth's persisted session storage directly
+  try {
+    const rawSupa = window.localStorage.getItem(SUPABASE_AUTH_STORAGE_KEY);
+    if (rawSupa) {
+      const parsedSupa = JSON.parse(rawSupa);
+      const supaUser = parsedSupa?.user || parsedSupa?.currentSession?.user;
+      if (supaUser && supaUser.id) {
+        const profile = mapSupabaseAuthUserToProfile(supaUser as User, null);
+        if (profile.email) {
+          window.localStorage.setItem(
+            STORAGE_KEYS.USER_PROFILE,
+            JSON.stringify(profile)
+          );
+          return profile;
+        }
+      }
+    }
+  } catch {
+    // Ignore
+  }
+
+  return null;
 }
 
-function saveStoredUserProfile(profile: UserProfile | null): void {
+function saveStoredUserProfile(
+  profile: UserProfile | null,
+  notify = true
+): void {
   if (typeof window === "undefined") return;
   if (!profile) {
     window.localStorage.removeItem(STORAGE_KEYS.USER_PROFILE);
+    if (notify) {
+      notifyAuthChangedThrottled("signed_out");
+    }
   } else {
     window.localStorage.setItem(
       STORAGE_KEYS.USER_PROFILE,
       JSON.stringify(profile)
     );
+    if (notify) {
+      const sig = `${profile.id}|${profile.email}|${profile.full_name}|${
+        profile.avatar_url || ""
+      }|${profile.last_synced_at || ""}`;
+      notifyAuthChangedThrottled(sig);
+    }
   }
-  window.dispatchEvent(new Event("speakflow-auth-changed"));
+}
+
+function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(fallback), ms);
+    promise
+      .then((val) => {
+        clearTimeout(timer);
+        resolve(val);
+      })
+      .catch(() => {
+        clearTimeout(timer);
+        resolve(fallback);
+      });
+  });
 }
 
 /**
- * Get active logged-in user (checks Supabase OAuth session first, then stored Google/Cloud profile)
+ * Get active logged-in Google user from Supabase OAuth session (and sync profile + progress)
  */
 export async function getCurrentUser(): Promise<UserProfile | null> {
   const supabase = getSupabaseClient();
-  if (supabase) {
+  if (!supabase) {
+    return getStoredUserProfile();
+  }
+
+  if (activeGetUserPromise) {
+    return activeGetUserPromise;
+  }
+
+  activeGetUserPromise = (async () => {
     try {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
+      // Process any pending OAuth tokens captured once from URL
+      if (pendingOAuthTokens) {
+        const tokens = pendingOAuthTokens;
+        pendingOAuthTokens = null;
+
+        if (tokens.accessToken && tokens.refreshToken) {
+          await withTimeout(
+            supabase.auth.setSession({
+              access_token: tokens.accessToken,
+              refresh_token: tokens.refreshToken,
+            }),
+            3500,
+            null
+          );
+        } else if (tokens.code) {
+          await withTimeout(
+            supabase.auth.exchangeCodeForSession(tokens.code),
+            4000,
+            null
+          );
+        }
+      }
+
+      const sessionResult = await withTimeout(
+        supabase.auth.getSession(),
+        3500,
+        null
+      );
+      const session = sessionResult?.data?.session || null;
+
       if (session?.user) {
-        const u = session.user;
-        const profile: UserProfile = {
-          id: u.id,
-          email: u.email || "",
-          full_name:
-            u.user_metadata?.full_name ||
-            u.user_metadata?.name ||
-            u.email?.split("@")[0] ||
-            "Học viên SpeakFlow",
-          avatar_url:
-            u.user_metadata?.avatar_url || u.user_metadata?.picture || undefined,
-          provider: "google",
-        };
-        saveStoredUserProfile(profile);
+        const existing = getStoredUserProfile();
+        const profile = mapSupabaseAuthUserToProfile(session.user, existing);
+        saveStoredUserProfile(profile, false);
+
+        if (lastSyncedUserId !== profile.id) {
+          lastSyncedUserId = profile.id;
+          setTimeout(() => {
+            void syncUserProgressWithCloud(profile);
+          }, 0);
+        }
+
         return profile;
       }
+
+      const stored = getStoredUserProfile();
+      if (stored) {
+        if (lastSyncedUserId !== stored.id) {
+          lastSyncedUserId = stored.id;
+          setTimeout(() => {
+            void syncUserProgressWithCloud(stored);
+          }, 0);
+        }
+        return stored;
+      }
+
+      return null;
     } catch {
-      // Fallback to stored profile
+      return getStoredUserProfile();
+    } finally {
+      activeGetUserPromise = null;
     }
-  }
-  return getStoredUserProfile();
+  })();
+
+  return activeGetUserPromise;
 }
 
 /**
- * Check if Google OAuth provider is enabled on the Supabase project before redirecting
- * so the browser never navigates to a broken `{"error_code":"validation_failed","msg":"Unsupported provider: provider is not enabled"}` JSON page.
+ * Check if Google OAuth provider is enabled on the Supabase project
  */
 export async function isGoogleOAuthEnabledOnSupabase(): Promise<boolean> {
+  if (cachedGoogleOAuthEnabled !== null) {
+    return cachedGoogleOAuthEnabled;
+  }
   const creds = resolveSupabaseCredentials();
   if (!creds) return false;
   try {
@@ -211,42 +561,52 @@ export async function isGoogleOAuthEnabledOnSupabase(): Promise<boolean> {
     });
     if (!res.ok) return false;
     const settings = await res.json();
-    return Boolean(settings?.external?.google);
+    const enabled = Boolean(settings?.external?.google);
+    cachedGoogleOAuthEnabled = enabled;
+    return enabled;
   } catch {
     return false;
   }
 }
 
 /**
- * Trigger Supabase Google OAuth Sign-In (only redirects if Google provider is enabled on Supabase)
+ * Trigger Supabase Google OAuth Sign-In (Redirects to accounts.google.com via Supabase Auth)
  */
-export async function signInWithGoogleOAuth(): Promise<{
+export async function signInWithGoogleOAuth(options?: {
+  forceRedirect?: boolean;
+}): Promise<{
   ok: boolean;
   providerDisabled?: boolean;
   error?: string;
 }> {
+  if (typeof window !== "undefined" && isForceLocalMode()) {
+    setForceLocalMode(false);
+  }
+
   const supabase = getSupabaseClient();
   if (!supabase) {
     return {
       ok: false,
-      error: "Đang ở chế độ Local. Hãy bật chế độ Supabase Cloud trước.",
+      error: "Không thể khởi tạo kết nối tới Supabase Cloud.",
     };
   }
 
-  // Pre-check if Google OAuth is enabled on Supabase to prevent raw JSON error page redirect
-  const isGoogleEnabled = await isGoogleOAuthEnabledOnSupabase();
-  if (!isGoogleEnabled) {
-    return {
-      ok: false,
-      providerDisabled: true,
-      error:
-        "Google OAuth chưa được bật trên Supabase Dashboard. Bạn có thể nhập Gmail ngay bên dưới để đăng nhập & đồng bộ trực tiếp lên Supabase Cloud!",
-    };
+  if (!options?.forceRedirect) {
+    const isGoogleEnabled = await isGoogleOAuthEnabledOnSupabase();
+    if (!isGoogleEnabled) {
+      return {
+        ok: false,
+        providerDisabled: true,
+        error:
+          "Google Provider chưa được bật trên Supabase Dashboard. Hãy bật Google Provider trong Supabase (hoặc bấm nút 'Gọi tới Google OAuth ngay' bên dưới sau khi bật).",
+      };
+    }
   }
 
   try {
     const redirectTo =
       typeof window !== "undefined" ? window.location.origin : undefined;
+
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
@@ -254,17 +614,24 @@ export async function signInWithGoogleOAuth(): Promise<{
         skipBrowserRedirect: true,
         queryParams: {
           access_type: "offline",
-          prompt: "consent",
+          prompt: "select_account",
         },
       },
     });
+
     if (error) {
       return { ok: false, error: error.message };
     }
+
     if (data?.url && typeof window !== "undefined") {
       window.location.assign(data.url);
+      return { ok: true };
     }
-    return { ok: true };
+
+    return {
+      ok: false,
+      error: "Không nhận được URL chuyển hướng từ Supabase Google OAuth.",
+    };
   } catch (err) {
     return {
       ok: false,
@@ -275,137 +642,395 @@ export async function signInWithGoogleOAuth(): Promise<{
 }
 
 /**
- * Instant Google / Gmail Cloud Sync Sign-In (Works immediately even before Google OAuth Client ID is configured in Supabase)
- * Syncs all learning progress & streaks to `user_card_progress` and `user_stats` on Supabase by Gmail!
+ * Update the logged-in user's display name and persist it to Supabase Auth + user_stats
  */
-export async function signInWithGmailCloudSync(
-  email: string,
-  fullName?: string
-): Promise<UserProfile> {
-  const cleanEmail = email.trim().toLowerCase();
-  const displayName =
-    fullName?.trim() ||
-    cleanEmail
-      .split("@")[0]
-      .replace(/[._-]/g, " ")
-      .replace(/\b\w/g, (l) => l.toUpperCase());
+export async function updateUserDisplayName(
+  fullName: string
+): Promise<UserProfile | null> {
+  const cleanName = fullName.trim();
+  if (!cleanName) return getStoredUserProfile();
 
-  const userId = emailToDeterministicUuid(cleanEmail);
-  const avatarUrl = `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(
-    displayName
-  )}&backgroundColor=0284c7,4f46e5,059669`;
+  const current = await getCurrentUser();
+  if (!current) return null;
 
-  const profile: UserProfile = {
-    id: userId,
-    email: cleanEmail,
-    full_name: displayName,
-    avatar_url: avatarUrl,
-    provider: "cloud",
+  const updatedProfile: UserProfile = {
+    ...current,
+    full_name: cleanName,
+    last_synced_at: new Date().toISOString(),
   };
 
-  saveStoredUserProfile(profile);
-  await syncUserProgressWithCloud(profile);
-  return profile;
-}
+  saveStoredUserProfile(updatedProfile, true);
 
-/**
- * Sign out current user
- */
-export async function signOutUser(): Promise<void> {
   const supabase = getSupabaseClient();
   if (supabase) {
     try {
-      await supabase.auth.signOut();
+      await supabase.auth.updateUser({
+        data: { full_name: cleanName, name: cleanName },
+      });
+      await supabase
+        .from("user_stats")
+        .update({
+          full_name: cleanName,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("user_id", current.id);
     } catch {
-      // ignore
+      // Ignore network errors
     }
   }
-  saveStoredUserProfile(null);
+
+  return updatedProfile;
 }
 
 /**
- * Sync local practiced cards & streak with Supabase `user_card_progress` and `user_stats`
+ * Sign out current user and clear local personal cache so another account starts clean
+ */
+export async function signOutUser(): Promise<void> {
+  const supabase = getSupabaseClient();
+  lastSyncedUserId = null;
+  if (typeof window !== "undefined") {
+    window.localStorage.removeItem(STORAGE_KEYS.USER_PROFILE);
+    window.localStorage.removeItem(SUPABASE_AUTH_STORAGE_KEY);
+    window.localStorage.removeItem(STORAGE_KEYS.STREAK);
+    window.sessionStorage.removeItem(JUST_LOGGED_IN_KEY);
+    resetLocalToSeed();
+  }
+  if (supabase) {
+    await withTimeout(supabase.auth.signOut(), 2500, null);
+  }
+  saveStoredUserProfile(null, true);
+}
+
+/**
+ * Bidirectional sync of user account info, streak (`user_stats`), and per-card SRS progress (`user_card_progress`)
  */
 export async function syncUserProgressWithCloud(
   user: UserProfile
 ): Promise<void> {
-  const supabase = getSupabaseClient();
-  if (!supabase) return;
+  if (activeSyncPromise) {
+    return activeSyncPromise;
+  }
 
-  try {
-    // 1. Sync user_stats (streak)
-    const localStreak = getStreakData();
-    const { data: existingStats } = await supabase
-      .from("user_stats")
-      .select("*")
-      .eq("user_id", user.id)
-      .maybeSingle();
+  activeSyncPromise = (async () => {
+    const supabase = getSupabaseClient();
+    if (!supabase) return;
 
-    if (existingStats) {
-      const mergedStreak: StreakData = {
-        currentStreak: Math.max(
-          localStreak.currentStreak,
-          existingStats.current_streak || 1
-        ),
-        lastStudyDate:
-          existingStats.last_study_date || localStreak.lastStudyDate,
-        todayReviewedCount: Math.max(
-          localStreak.todayReviewedCount,
-          existingStats.today_reviewed_count || 0
-        ),
-      };
+    try {
+      const today = getTodayDateString();
+      const yesterday = getYesterdayDateString();
+      const localStreak = getStreakData();
+
+      // Check both authenticated UUID and any legacy deterministic UUID for the same email
+      const legacyId = user.email
+        ? emailToDeterministicUuid(user.email)
+        : null;
+
+      const { data: existingStats } = await supabase
+        .from("user_stats")
+        .select("*")
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      let remoteStats = existingStats;
+      if (!remoteStats && legacyId && legacyId !== user.id) {
+        const { data: legacyStats } = await supabase
+          .from("user_stats")
+          .select("*")
+          .eq("user_id", legacyId)
+          .maybeSingle();
+        if (legacyStats) {
+          remoteStats = legacyStats;
+        }
+      }
+
+      // 1. Merge Streak & Profile Info
+      let mergedStreak: StreakData = { ...localStreak };
+
+      if (remoteStats) {
+        const remoteDate: string | null = remoteStats.last_study_date || null;
+        const remoteStreakCount: number = remoteStats.current_streak || 1;
+        const remoteTodayCount: number = remoteStats.today_reviewed_count || 0;
+
+        if (remoteDate === today && localStreak.lastStudyDate === today) {
+          mergedStreak = {
+            currentStreak: Math.max(
+              localStreak.currentStreak,
+              remoteStreakCount
+            ),
+            lastStudyDate: today,
+            todayReviewedCount: Math.max(
+              localStreak.todayReviewedCount,
+              remoteTodayCount
+            ),
+          };
+        } else if (remoteDate === today) {
+          mergedStreak = {
+            currentStreak: remoteStreakCount,
+            lastStudyDate: today,
+            todayReviewedCount: remoteTodayCount,
+          };
+        } else if (localStreak.lastStudyDate === today) {
+          const nextStreak =
+            remoteDate === yesterday
+              ? Math.max(localStreak.currentStreak, remoteStreakCount + 1)
+              : Math.max(localStreak.currentStreak, remoteStreakCount);
+          mergedStreak = {
+            currentStreak: nextStreak,
+            lastStudyDate: today,
+            todayReviewedCount: localStreak.todayReviewedCount,
+          };
+        } else if (remoteDate === yesterday) {
+          mergedStreak = {
+            currentStreak: remoteStreakCount,
+            lastStudyDate: yesterday,
+            todayReviewedCount: 0,
+          };
+        } else {
+          mergedStreak = {
+            currentStreak: Math.max(
+              localStreak.currentStreak,
+              remoteStreakCount
+            ),
+            lastStudyDate: remoteDate || localStreak.lastStudyDate,
+            todayReviewedCount: 0,
+          };
+        }
+      }
+
       if (typeof window !== "undefined") {
         window.localStorage.setItem(
           STORAGE_KEYS.STREAK,
           JSON.stringify(mergedStreak)
         );
       }
-      await supabase.from("user_stats").upsert({
-        user_id: user.id,
-        email: user.email,
-        full_name: user.full_name,
-        avatar_url: user.avatar_url || null,
-        current_streak: mergedStreak.currentStreak,
-        last_study_date: mergedStreak.lastStudyDate,
-        today_reviewed_count: mergedStreak.todayReviewedCount,
-        updated_at: new Date().toISOString(),
-      });
-    } else {
-      await supabase.from("user_stats").upsert({
-        user_id: user.id,
-        email: user.email,
-        full_name: user.full_name,
-        avatar_url: user.avatar_url || null,
-        current_streak: localStreak.currentStreak,
-        last_study_date: localStreak.lastStudyDate,
-        today_reviewed_count: localStreak.todayReviewedCount,
-        updated_at: new Date().toISOString(),
-      });
-    }
 
-    // 2. Push any locally practiced cards to `user_card_progress`
-    const { cards: localCards } = ensureLocalSeed();
-    const practicedLocal = localCards.filter(
-      (c) => c.last_practiced_at !== null || c.box > 1
-    );
+      const finalFullName =
+        user.full_name || remoteStats?.full_name || "Học viên SpeakFlow";
+      const finalAvatarUrl =
+        user.avatar_url || remoteStats?.avatar_url || undefined;
 
-    if (practicedLocal.length > 0) {
-      const rows = practicedLocal.map((c) => ({
-        user_id: user.id,
-        card_id: c.id,
-        box: c.box,
-        interval_days: c.interval_days,
-        ease_factor: c.ease_factor,
-        next_review_at: c.next_review_at,
-        last_practiced_at: c.last_practiced_at || new Date().toISOString(),
-      }));
-      await supabase
+      await supabase.from("user_stats").upsert(
+        {
+          user_id: user.id,
+          email: user.email,
+          full_name: finalFullName,
+          avatar_url: finalAvatarUrl || null,
+          current_streak: mergedStreak.currentStreak,
+          last_study_date: mergedStreak.lastStudyDate,
+          today_reviewed_count: mergedStreak.todayReviewedCount,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "user_id" }
+      );
+
+      // 2. Pull remote `user_card_progress` & merge with local practiced cards
+      const userIdsToFetch =
+        legacyId && legacyId !== user.id ? [user.id, legacyId] : [user.id];
+
+      const { data: remoteProgressRows } = await supabase
         .from("user_card_progress")
-        .upsert(rows, { onConflict: "user_id,card_id" });
+        .select("*")
+        .in("user_id", userIdsToFetch);
+
+      const remoteMap = new Map<
+        string,
+        {
+          card_id: string;
+          box: number;
+          interval_days: number;
+          ease_factor: number;
+          next_review_at: string;
+          last_practiced_at: string;
+        }
+      >();
+
+      if (remoteProgressRows && remoteProgressRows.length > 0) {
+        for (const row of remoteProgressRows) {
+          const existing = remoteMap.get(row.card_id);
+          if (
+            !existing ||
+            new Date(row.last_practiced_at).getTime() >
+              new Date(existing.last_practiced_at).getTime()
+          ) {
+            remoteMap.set(row.card_id, row);
+          }
+        }
+      }
+
+      const { cards: localCards } = ensureLocalSeed();
+      const rowsToUpsert: Array<{
+        user_id: string;
+        card_id: string;
+        box: number;
+        interval_days: number;
+        ease_factor: number;
+        next_review_at: string;
+        last_practiced_at: string;
+      }> = [];
+
+      const mergedCards = localCards.map((card) => {
+        const remoteProg = remoteMap.get(card.id);
+        const localPracticed =
+          card.last_practiced_at !== null || card.box > 1;
+
+        if (remoteProg && localPracticed) {
+          const remoteTime = new Date(
+            remoteProg.last_practiced_at || 0
+          ).getTime();
+          const localTime = new Date(card.last_practiced_at || 0).getTime();
+
+          if (localTime > remoteTime) {
+            rowsToUpsert.push({
+              user_id: user.id,
+              card_id: card.id,
+              box: card.box,
+              interval_days: card.interval_days,
+              ease_factor: card.ease_factor,
+              next_review_at: card.next_review_at,
+              last_practiced_at:
+                card.last_practiced_at || new Date().toISOString(),
+            });
+            return card;
+          } else {
+            return {
+              ...card,
+              box: remoteProg.box,
+              interval_days: remoteProg.interval_days,
+              ease_factor: remoteProg.ease_factor,
+              next_review_at: remoteProg.next_review_at,
+              last_practiced_at: remoteProg.last_practiced_at,
+            };
+          }
+        } else if (remoteProg) {
+          return {
+            ...card,
+            box: remoteProg.box,
+            interval_days: remoteProg.interval_days,
+            ease_factor: remoteProg.ease_factor,
+            next_review_at: remoteProg.next_review_at,
+            last_practiced_at: remoteProg.last_practiced_at,
+          };
+        } else if (localPracticed) {
+          rowsToUpsert.push({
+            user_id: user.id,
+            card_id: card.id,
+            box: card.box,
+            interval_days: card.interval_days,
+            ease_factor: card.ease_factor,
+            next_review_at: card.next_review_at,
+            last_practiced_at:
+              card.last_practiced_at || new Date().toISOString(),
+          });
+          return card;
+        }
+
+        return card;
+      });
+
+      // Also migrate any legacy rows that belonged to legacyId into user.id
+      if (legacyId && legacyId !== user.id && remoteProgressRows) {
+        for (const r of remoteProgressRows) {
+          if (
+            r.user_id === legacyId &&
+            !rowsToUpsert.some((u) => u.card_id === r.card_id)
+          ) {
+            rowsToUpsert.push({
+              user_id: user.id,
+              card_id: r.card_id,
+              box: r.box,
+              interval_days: r.interval_days,
+              ease_factor: r.ease_factor,
+              next_review_at: r.next_review_at,
+              last_practiced_at: r.last_practiced_at,
+            });
+          }
+        }
+      }
+
+      if (rowsToUpsert.length > 0) {
+        await supabase
+          .from("user_card_progress")
+          .upsert(rowsToUpsert, { onConflict: "user_id,card_id" });
+      }
+
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(
+          STORAGE_KEYS.CARDS,
+          JSON.stringify(mergedCards)
+        );
+      }
+
+      const syncedProfile: UserProfile = {
+        ...user,
+        full_name: finalFullName,
+        avatar_url: finalAvatarUrl,
+        last_synced_at: new Date().toISOString(),
+      };
+      saveStoredUserProfile(syncedProfile, true);
+    } catch {
+      // Ignore network errors cleanly
+    } finally {
+      activeSyncPromise = null;
     }
-  } catch {
-    // Ignore network errors cleanly
-  }
+  })();
+
+  return activeSyncPromise;
+}
+
+export function getInitialLocalData(): { decks: Deck[]; cards: Card[] } {
+  return ensureLocalSeed();
+}
+
+export function getInitialAccountProgressSummary(): AccountProgressSummary {
+  const { cards } = ensureLocalSeed();
+  const user = getStoredUserProfile();
+  const streak = getStreakData();
+
+  const practicedCards = cards.filter(
+    (c) => c.last_practiced_at !== null || c.box > 1
+  ).length;
+  const masteredCards = cards.filter(
+    (c) => c.box >= 3 || c.interval_days >= 3
+  ).length;
+  const dueCards = cards.filter((c) => isCardDue(c)).length;
+
+  return {
+    totalCards: cards.length,
+    practicedCards,
+    masteredCards,
+    dueCards,
+    currentStreak: streak.currentStreak,
+    todayReviewedCount: streak.todayReviewedCount,
+    lastStudyDate: streak.lastStudyDate,
+    lastSyncedAt: user?.last_synced_at || null,
+  };
+}
+
+/**
+ * Get a complete summary of the current user's saved progress
+ */
+export async function getAccountProgressSummary(): Promise<AccountProgressSummary> {
+  const [cards, user] = await Promise.all([getCards(), getCurrentUser()]);
+  const streak = getStreakData();
+
+  const practicedCards = cards.filter(
+    (c) => c.last_practiced_at !== null || c.box > 1
+  ).length;
+  const masteredCards = cards.filter(
+    (c) => c.box >= 3 || c.interval_days >= 3
+  ).length;
+  const dueCards = cards.filter((c) => isCardDue(c)).length;
+
+  return {
+    totalCards: cards.length,
+    practicedCards,
+    masteredCards,
+    dueCards,
+    currentStreak: streak.currentStreak,
+    todayReviewedCount: streak.todayReviewedCount,
+    lastStudyDate: streak.lastStudyDate,
+    lastSyncedAt: user?.last_synced_at || null,
+  };
 }
 
 // ============================================================================
@@ -432,14 +1057,20 @@ function ensureLocalSeed(): { decks: Deck[]; cards: Card[] } {
       decks = SEED_DECKS;
       window.localStorage.setItem(STORAGE_KEYS.DECKS, JSON.stringify(decks));
     } else {
-      // Sync deck titles/descriptions from SEED_DECKS if updated
       const seedDeckMap = new Map(SEED_DECKS.map((d) => [d.id, d]));
       let decksChanged = false;
       decks = decks.map((d) => {
         const seedDeck = seedDeckMap.get(d.id);
-        if (seedDeck && (d.title !== seedDeck.title || d.description !== seedDeck.description)) {
+        if (
+          seedDeck &&
+          (d.title !== seedDeck.title || d.description !== seedDeck.description)
+        ) {
           decksChanged = true;
-          return { ...d, title: seedDeck.title, description: seedDeck.description };
+          return {
+            ...d,
+            title: seedDeck.title,
+            description: seedDeck.description,
+          };
         }
         return d;
       });
@@ -461,9 +1092,10 @@ function ensureLocalSeed(): { decks: Deck[]; cards: Card[] } {
       cards = SEED_CARDS;
       window.localStorage.setItem(STORAGE_KEYS.CARDS, JSON.stringify(cards));
     } else {
-      // Auto-merge any newly added SEED_CARDS while preserving existing SRS progress
       const existingIds = new Set(cards.map((c) => c.id));
-      const missingSeedCards = SEED_CARDS.filter((sc) => !existingIds.has(sc.id));
+      const missingSeedCards = SEED_CARDS.filter(
+        (sc) => !existingIds.has(sc.id)
+      );
       if (missingSeedCards.length > 0) {
         cards = [...cards, ...missingSeedCards];
         window.localStorage.setItem(STORAGE_KEYS.CARDS, JSON.stringify(cards));
@@ -510,11 +1142,11 @@ export async function getDecks(): Promise<Deck[]> {
 }
 
 /**
- * Fetch all cards (optionally filtered by deck_id) + merge logged-in user's personal SRS progress
+ * Fetch all cards (optionally filtered by deck_id) + merge logged-in Google user's personal SRS progress
  */
 export async function getCards(deckId?: string): Promise<Card[]> {
   const supabase = getSupabaseClient();
-  const activeUser = getStoredUserProfile();
+  const activeUser = getStoredUserProfile() || (await getCurrentUser());
 
   if (supabase) {
     try {
@@ -563,7 +1195,7 @@ export async function getCards(deckId?: string): Promise<Card[]> {
           }
         }
 
-        // If a user is logged in, overlay their personal `user_card_progress`
+        // If a Google user is logged in, overlay their personal `user_card_progress`
         if (activeUser && baseCards.length > 0) {
           const { data: progressData } = await supabase
             .from("user_card_progress")
@@ -586,7 +1218,23 @@ export async function getCards(deckId?: string): Promise<Card[]> {
                 last_practiced_at: userProg.last_practiced_at,
               };
             });
+          } else {
+            // Reset any card progress on baseCards that might have come from anonymous table updates
+            baseCards = baseCards.map((card) => ({
+              ...card,
+              box: 1,
+              interval_days: 0,
+              ease_factor: 2.5,
+              last_practiced_at: null,
+            }));
           }
+        }
+
+        if (!deckId && typeof window !== "undefined" && baseCards.length > 0) {
+          window.localStorage.setItem(
+            STORAGE_KEYS.CARDS,
+            JSON.stringify(baseCards)
+          );
         }
 
         if (baseCards.length > 0) {
@@ -620,7 +1268,7 @@ export async function getDueCards(deckId?: string): Promise<Card[]> {
 }
 
 /**
- * Update a card's SRS values after user rating (saves to per-user table if logged in + card table)
+ * Update a card's SRS values after user rating (saves to per-user table if logged in + updates user_stats)
  */
 export async function submitCardReview(
   card: Card,
@@ -639,11 +1287,11 @@ export async function submitCardReview(
     const { cards } = ensureLocalSeed();
     const nextCards = cards.map((c) => (c.id === card.id ? updatedCard : c));
     window.localStorage.setItem(STORAGE_KEYS.CARDS, JSON.stringify(nextCards));
-    latestStreak = recordStudyActivity();
+    latestStreak = recordStudyActivity(1);
   }
 
   const supabase = getSupabaseClient();
-  const activeUser = getStoredUserProfile();
+  const activeUser = (await getCurrentUser()) || getStoredUserProfile();
 
   if (supabase) {
     try {
@@ -663,17 +1311,28 @@ export async function submitCardReview(
         );
 
         if (latestStreak) {
-          await supabase.from("user_stats").upsert({
-            user_id: activeUser.id,
-            email: activeUser.email,
-            full_name: activeUser.full_name,
-            avatar_url: activeUser.avatar_url || null,
-            current_streak: latestStreak.currentStreak,
-            last_study_date: latestStreak.lastStudyDate,
-            today_reviewed_count: latestStreak.todayReviewedCount,
-            updated_at: new Date().toISOString(),
-          });
+          await supabase.from("user_stats").upsert(
+            {
+              user_id: activeUser.id,
+              email: activeUser.email,
+              full_name: activeUser.full_name,
+              avatar_url: activeUser.avatar_url || null,
+              current_streak: latestStreak.currentStreak,
+              last_study_date: latestStreak.lastStudyDate,
+              today_reviewed_count: latestStreak.todayReviewedCount,
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: "user_id" }
+          );
         }
+
+        saveStoredUserProfile(
+          {
+            ...activeUser,
+            last_synced_at: new Date().toISOString(),
+          },
+          false
+        );
       } else {
         // Anonymous global card table update
         await supabase
@@ -693,6 +1352,97 @@ export async function submitCardReview(
   }
 
   return updatedCard;
+}
+
+/**
+ * Save progress & streak after completing a 60-Second Reflex Drill session
+ */
+export async function saveReflexDrillProgress(
+  drillItems: Array<{ card: Card; passed: boolean; score: number }>
+): Promise<void> {
+  const count = Math.max(1, drillItems.length);
+  const latestStreak = recordStudyActivity(count);
+  const nowIso = new Date().toISOString();
+
+  // Update local cards last_practiced_at for practiced items
+  if (typeof window !== "undefined" && drillItems.length > 0) {
+    const { cards } = ensureLocalSeed();
+    const practicedMap = new Map(drillItems.map((item) => [item.card.id, item]));
+    const nextCards = cards.map((c) => {
+      const item = practicedMap.get(c.id);
+      if (!item) return c;
+      if (item.passed && c.box === 1) {
+        const srsUpdate = calculateNextSRS(c, "good");
+        return { ...c, ...srsUpdate };
+      }
+      return {
+        ...c,
+        last_practiced_at: nowIso,
+      };
+    });
+    window.localStorage.setItem(STORAGE_KEYS.CARDS, JSON.stringify(nextCards));
+  }
+
+  const supabase = getSupabaseClient();
+  const activeUser = (await getCurrentUser()) || getStoredUserProfile();
+
+  if (supabase && activeUser) {
+    try {
+      await supabase.from("user_stats").upsert(
+        {
+          user_id: activeUser.id,
+          email: activeUser.email,
+          full_name: activeUser.full_name,
+          avatar_url: activeUser.avatar_url || null,
+          current_streak: latestStreak.currentStreak,
+          last_study_date: latestStreak.lastStudyDate,
+          today_reviewed_count: latestStreak.todayReviewedCount,
+          updated_at: nowIso,
+        },
+        { onConflict: "user_id" }
+      );
+
+      if (drillItems.length > 0) {
+        const progressRows = drillItems.map((item) => {
+          if (item.passed && item.card.box === 1) {
+            const srs = calculateNextSRS(item.card, "good");
+            return {
+              user_id: activeUser.id,
+              card_id: item.card.id,
+              box: srs.box,
+              interval_days: srs.interval_days,
+              ease_factor: srs.ease_factor,
+              next_review_at: srs.next_review_at,
+              last_practiced_at: nowIso,
+            };
+          }
+          return {
+            user_id: activeUser.id,
+            card_id: item.card.id,
+            box: item.card.box,
+            interval_days: item.card.interval_days,
+            ease_factor: item.card.ease_factor,
+            next_review_at: item.card.next_review_at,
+            last_practiced_at: nowIso,
+          };
+        });
+
+        await supabase
+          .from("user_card_progress")
+          .upsert(progressRows, { onConflict: "user_id,card_id" });
+      }
+
+      saveStoredUserProfile(
+        {
+          ...activeUser,
+          last_synced_at: nowIso,
+        },
+        true
+      );
+    } catch {
+      // Ignore network errors
+    }
+  }
 }
 
 /**
@@ -730,11 +1480,15 @@ export async function addCard(
   }
 
   const supabase = getSupabaseClient();
+  const activeUser = getStoredUserProfile();
   if (supabase) {
     try {
+      const payload = activeUser
+        ? { ...newCard, user_id: activeUser.id }
+        : newCard;
       const { data, error } = await supabase
         .from("cards")
-        .insert([newCard])
+        .insert([payload])
         .select()
         .single();
       if (!error && data) {
@@ -796,9 +1550,13 @@ export async function importCardsBatch(
   }
 
   const supabase = getSupabaseClient();
+  const activeUser = getStoredUserProfile();
   if (supabase) {
     try {
-      await supabase.from("cards").insert(createdCards);
+      const payload = activeUser
+        ? createdCards.map((c) => ({ ...c, user_id: activeUser.id }))
+        : createdCards;
+      await supabase.from("cards").insert(payload);
     } catch {
       // Fallback already saved locally
     }
@@ -828,7 +1586,7 @@ export async function deleteCard(cardId: string): Promise<void> {
 }
 
 /**
- * Reset local data back to default 30 seed cards
+ * Reset local data back to default seed cards
  */
 export function resetLocalToSeed(): void {
   if (typeof window === "undefined") return;
@@ -899,9 +1657,13 @@ export function getStreakData(): StreakData {
   }
 }
 
-export function recordStudyActivity(): StreakData {
+export function recordStudyActivity(incrementCount = 1): StreakData {
   if (typeof window === "undefined") {
-    return { currentStreak: 1, lastStudyDate: null, todayReviewedCount: 1 };
+    return {
+      currentStreak: 1,
+      lastStudyDate: null,
+      todayReviewedCount: incrementCount,
+    };
   }
 
   const today = getTodayDateString();
@@ -912,13 +1674,13 @@ export function recordStudyActivity(): StreakData {
   let todayCount = current.todayReviewedCount || 0;
 
   if (current.lastStudyDate === today) {
-    todayCount += 1;
+    todayCount += incrementCount;
   } else if (current.lastStudyDate === yesterday) {
     nextStreak += 1;
-    todayCount = 1;
+    todayCount = incrementCount;
   } else {
     nextStreak = 1;
-    todayCount = 1;
+    todayCount = incrementCount;
   }
 
   const updated: StreakData = {

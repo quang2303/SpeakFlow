@@ -17,20 +17,26 @@ import {
   Database,
   HardDrive,
   Mic,
+  CheckCircle2,
+  Cloud,
+  X,
 } from "lucide-react";
 import {
+  consumeJustLoggedInFlag,
   getCards,
   getDecks,
+  getInitialLocalData,
   getStreakData,
   getActiveStorageMode,
   getCurrentUser,
+  getStoredUserProfile,
   StreakData,
   StorageMode,
   UserProfile,
 } from "@/lib/dataService";
 import { Card, Deck } from "@/lib/seedData";
 import { isCardDue } from "@/lib/srs";
-import AuthUserTrigger from "@/components/AuthModal";
+import AuthUserTrigger, { UserAvatar } from "@/components/AuthModal";
 
 function getDeckIcon(iconName: string) {
   switch (iconName) {
@@ -55,31 +61,51 @@ export default function HomePage() {
     lastStudyDate: null,
     todayReviewedCount: 0,
   });
-  const [storageMode, setStorageMode] = useState<StorageMode>("local");
+  const [storageMode, setStorageMode] = useState<StorageMode>("supabase");
   const [user, setUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [justLoggedInBanner, setJustLoggedInBanner] = useState(false);
+
+  const syncDashboardFromLocal = useCallback(() => {
+    const localData = getInitialLocalData();
+    const cachedUser = getStoredUserProfile();
+    setDecks(localData.decks);
+    setCards(localData.cards);
+    setUser(cachedUser);
+    setStreak(getStreakData());
+    setStorageMode(getActiveStorageMode());
+    if (consumeJustLoggedInFlag()) {
+      setJustLoggedInBanner(true);
+    }
+    setLoading(false);
+  }, []);
 
   const loadDashboard = useCallback(async () => {
-    setLoading(true);
-    const [loadedDecks, loadedCards, currentUser] = await Promise.all([
+    // 1. Hydrate immediately from local seed / cached profile so UI never hangs or shows 0 cards
+    syncDashboardFromLocal();
+
+    // 2. Fetch fresh session & cloud progress in background once on mount
+    const [currentUser, loadedDecks, loadedCards] = await Promise.all([
+      getCurrentUser(),
       getDecks(),
       getCards(),
-      getCurrentUser(),
     ]);
     setDecks(loadedDecks);
     setCards(loadedCards);
     setUser(currentUser);
     setStreak(getStreakData());
     setStorageMode(getActiveStorageMode());
-    setLoading(false);
-  }, []);
+    if (consumeJustLoggedInFlag()) {
+      setJustLoggedInBanner(true);
+    }
+  }, [syncDashboardFromLocal]);
 
   useEffect(() => {
-    loadDashboard();
-    const handler = () => loadDashboard();
+    void loadDashboard();
+    const handler = () => syncDashboardFromLocal();
     window.addEventListener("speakflow-auth-changed", handler);
     return () => window.removeEventListener("speakflow-auth-changed", handler);
-  }, [loadDashboard]);
+  }, [loadDashboard, syncDashboardFromLocal]);
 
   const dueCards = cards.filter((c) => isCardDue(c));
   const masteredCards = cards.filter(
@@ -90,61 +116,120 @@ export default function HomePage() {
   );
 
   return (
-    <div className="px-4 md:px-8 pt-5 md:pt-8 pb-8 space-y-6 md:space-y-8">
-      {/* Top Bar (Mobile: Brand + Auth, Desktop: Welcome Header + Cloud Status) */}
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5 md:hidden">
-          <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-sky-500 via-indigo-500 to-emerald-500 p-[1.5px] shadow-lg shadow-indigo-500/20">
-            <div className="w-full h-full bg-slate-950 rounded-[14px] flex items-center justify-center">
-              <Zap className="w-5 h-5 text-sky-400 fill-sky-400/20" />
+    <div className="px-4 md:px-8 pt-5 md:pt-8 pb-8 space-y-6 md:space-y-7">
+      {/* Celebratory Banner right after Google OAuth Login */}
+      {user && justLoggedInBanner && (
+        <div className="rounded-2xl bg-gradient-to-r from-emerald-500/20 via-teal-500/15 to-sky-500/15 border border-emerald-500/40 p-4 flex items-center justify-between gap-3 shadow-lg animate-fadeIn">
+          <div className="flex items-center gap-3 min-w-0">
+            <UserAvatar
+              user={user}
+              sizeClass="w-10 h-10 rounded-xl text-xs"
+              showOnlineDot
+            />
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="inline-flex items-center gap-1 text-xs font-extrabold text-emerald-300">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  Đăng nhập Google thành công!
+                </span>
+                <span className="text-xs font-bold text-white truncate">
+                  {user.full_name} ({user.email})
+                </span>
+              </div>
+              <p className="text-xs text-slate-300 mt-0.5">
+                Tiến trình học, lịch ôn SM-2 và chuỗi Streak của bạn đã được kết
+                nối & đồng bộ tự động trên Supabase Cloud.
+              </p>
             </div>
           </div>
-          <div>
-            <h1 className="text-lg font-bold tracking-tight bg-gradient-to-r from-white via-slate-100 to-sky-300 bg-clip-text text-transparent">
-              SpeakFlow
-            </h1>
-            <p className="text-[11px] text-slate-400">
-              Phản xạ giao tiếp tiếng Anh
-            </p>
+          <button
+            type="button"
+            onClick={() => setJustLoggedInBanner(false)}
+            className="p-1.5 rounded-xl bg-slate-900/60 hover:bg-slate-900 text-slate-400 hover:text-white shrink-0"
+            aria-label="Đóng thông báo"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {/* Top Bar (Mobile: Brand + Auth, Desktop: Welcome Header + Logged-in User Chip + Cloud Status) */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-center justify-between gap-2.5 md:hidden">
+          <div className="flex items-center gap-2.5">
+            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-sky-500 via-indigo-500 to-emerald-500 p-[1.5px] shadow-lg shadow-indigo-500/20">
+              <div className="w-full h-full bg-slate-950 rounded-[14px] flex items-center justify-center">
+                <Zap className="w-5 h-5 text-sky-400 fill-sky-400/20" />
+              </div>
+            </div>
+            <div>
+              <h1 className="text-lg font-bold tracking-tight bg-gradient-to-r from-white via-slate-100 to-sky-300 bg-clip-text text-transparent">
+                SpeakFlow
+              </h1>
+              <p className="text-[11px] text-slate-400">
+                Phản xạ giao tiếp tiếng Anh
+              </p>
+            </div>
           </div>
+
+          <AuthUserTrigger compact />
         </div>
 
         {/* Desktop Greeting Header */}
-        <div className="hidden md:block">
+        <div className="hidden md:block space-y-1.5">
+          {user ? (
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+              <span>TÀI KHOẢN GOOGLE ĐÃ ĐĂNG NHẬP • ĐỒNG BỘ CLOUD TỰ ĐỘNG</span>
+            </div>
+          ) : (
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold bg-amber-500/10 text-amber-300 border border-amber-500/25">
+              <span>CHẾ ĐỘ KHÁCH • CHƯA ĐĂNG NHẬP GOOGLE</span>
+            </div>
+          )}
+
           <h1 className="text-2xl lg:text-3xl font-extrabold text-white tracking-tight">
             {user
               ? `Xin chào, ${user.full_name}! 👋`
               : "Bảng Điều Khiển Luyện Phản Xạ"}
           </h1>
-          <p className="text-sm text-slate-400 mt-1">
-            {user
-              ? `Tiến trình học của bạn (${user.email}) đang được đồng bộ trực tiếp trên Supabase Cloud.`
-              : "Đăng nhập Google ở thanh bên trái để lưu lịch ôn tập SM-2 xuyên suốt PC & Điện thoại."}
+          <p className="text-sm text-slate-400">
+            {user ? (
+              <>
+                Đang đăng nhập với{" "}
+                <strong className="text-sky-300">{user.email}</strong> • Đã lưu{" "}
+                <strong className="text-emerald-300">
+                  {practicedCards.length}/{cards.length} câu
+                </strong>{" "}
+                trên đám mây.
+              </>
+            ) : (
+              "Bấm 'Đăng nhập Google' ở góc trên trái hoặc góc trên phải để lưu lịch ôn tập SM-2 xuyên suốt PC & Điện thoại."
+            )}
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
-          <div className="md:hidden">
-            <AuthUserTrigger compact />
-          </div>
+        {/* Top-Right Status & Account Area */}
+        <div className="hidden md:flex items-center gap-2.5 shrink-0">
+          <AuthUserTrigger compact />
 
           <Link
             href="/manage"
-            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+            className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-2xl text-xs font-semibold border transition-colors ${
               storageMode === "supabase"
-                ? "bg-emerald-500/10 text-emerald-300 border-emerald-500/30"
+                ? "bg-emerald-500/10 text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/15"
                 : "bg-slate-900 text-slate-300 border-slate-800 hover:border-slate-700"
             }`}
           >
             {storageMode === "supabase" ? (
               <>
-                <Database className="w-3.5 h-3.5 text-emerald-400" />
-                <span className="hidden sm:inline">Supabase Cloud</span>
+                <Cloud className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Supabase Cloud</span>
               </>
             ) : (
               <>
                 <HardDrive className="w-3.5 h-3.5 text-amber-400" />
-                <span className="hidden sm:inline">Local Mode</span>
+                <span>Local Mode</span>
               </>
             )}
           </Link>
@@ -276,7 +361,7 @@ export default function HomePage() {
           </Link>
         </div>
 
-        {loading ? (
+        {loading && decks.length === 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {[1, 2, 3, 4].map((n) => (
               <div

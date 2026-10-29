@@ -18,7 +18,11 @@ import {
   XCircle,
   Zap,
 } from "lucide-react";
-import { getCards, recordStudyActivity } from "@/lib/dataService";
+import {
+  getCards,
+  getInitialLocalData,
+  saveReflexDrillProgress,
+} from "@/lib/dataService";
 import { Card } from "@/lib/seedData";
 import {
   evaluatePronunciation,
@@ -78,14 +82,21 @@ export default function ReflexDrillPage() {
   const recognizerRef = useRef<SpeechRecognizerController | null>(null);
   const cardStartTimeRef = useRef<number>(Date.now());
   const advancingRef = useRef<boolean>(false);
+  const historyRef = useRef<DrillHistoryItem[]>([]);
 
   useEffect(() => {
+    setAllCards(getInitialLocalData().cards);
     async function load() {
       const cards = await getCards();
       setAllCards(cards);
     }
-    load();
+    void load();
+    const handler = () => {
+      setAllCards(getInitialLocalData().cards);
+    };
+    window.addEventListener("speakflow-auth-changed", handler);
     return () => {
+      window.removeEventListener("speakflow-auth-changed", handler);
       recognizerRef.current?.stop();
     };
   }, []);
@@ -103,7 +114,7 @@ export default function ReflexDrillPage() {
   const finishDrill = useCallback(() => {
     stopMic();
     setStatus("finished");
-    recordStudyActivity();
+    void saveReflexDrillProgress(historyRef.current);
   }, [stopMic]);
 
   const advanceToNextCard = useCallback(
@@ -139,19 +150,18 @@ export default function ReflexDrillPage() {
         passed,
       });
 
-      setHistory((prev) => [
-        ...prev,
-        {
-          card,
-          spoken: spokenText || "(Hết giờ 7s)",
-          score: finalScore,
-          correctCount: evalResult.correctCount,
-          totalCount: evalResult.totalCount,
-          responseTimeSec: elapsedSec,
-          passed,
-          words: evalResult.words,
-        },
-      ]);
+      const nextItem: DrillHistoryItem = {
+        card,
+        spoken: spokenText || "(Hết giờ 7s)",
+        score: finalScore,
+        correctCount: evalResult.correctCount,
+        totalCount: evalResult.totalCount,
+        responseTimeSec: elapsedSec,
+        passed,
+        words: evalResult.words,
+      };
+      historyRef.current = [...historyRef.current, nextItem];
+      setHistory(historyRef.current);
 
       setTimeout(() => {
         setLastFeedback(null);
@@ -255,6 +265,7 @@ export default function ReflexDrillPage() {
     const shuffled = shuffleCards(pool);
 
     setDrillCards(shuffled);
+    historyRef.current = [];
     setHistory([]);
     setCurrentIdx(0);
     setGlobalTimeLeft(TOTAL_DRILL_SECONDS);

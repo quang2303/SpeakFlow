@@ -24,7 +24,12 @@ import {
   Flame,
   Keyboard,
 } from "lucide-react";
-import { getCards, getDecks, submitCardReview } from "@/lib/dataService";
+import {
+  getCards,
+  getDecks,
+  getInitialLocalData,
+  submitCardReview,
+} from "@/lib/dataService";
 import { Card, Deck } from "@/lib/seedData";
 import {
   generateFirstLetterHint,
@@ -289,8 +294,20 @@ function StudySessionContent() {
   }, [selectedDeckId, resetSpeechState]);
 
   useEffect(() => {
-    loadStudyCards();
-  }, [loadStudyCards]);
+    void loadStudyCards();
+    const handler = () => {
+      const local = getInitialLocalData();
+      setDecks(local.decks);
+      const filtered =
+        selectedDeckId === "all"
+          ? local.cards
+          : local.cards.filter((c) => c.deck_id === selectedDeckId);
+      const due = filtered.filter((c) => isCardDue(c));
+      setStudyQueue(due.length > 0 ? due : filtered);
+    };
+    window.addEventListener("speakflow-auth-changed", handler);
+    return () => window.removeEventListener("speakflow-auth-changed", handler);
+  }, [loadStudyCards, selectedDeckId]);
 
   const currentCard = studyQueue[currentIndex];
   const currentDeck = decks.find((d) => d.id === currentCard?.deck_id);

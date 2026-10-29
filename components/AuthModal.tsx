@@ -1,25 +1,36 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   LogOut,
   CheckCircle2,
   Cloud,
   X,
   RefreshCw,
-  Mail,
-  User as UserIcon,
   ExternalLink,
-  ChevronDown,
-  ChevronUp,
+  Copy,
+  Check,
+  Flame,
+  Trophy,
+  BookOpenCheck,
+  Pencil,
+  AlertTriangle,
+  Loader2,
+  UserCheck,
+  ChevronRight,
 } from "lucide-react";
 import {
+  AccountProgressSummary,
+  getAccountProgressSummary,
   getCurrentUser,
+  getInitialAccountProgressSummary,
+  getStoredUserProfile,
+  getSupabaseCallbackUrl,
   isGoogleOAuthEnabledOnSupabase,
-  signInWithGmailCloudSync,
   signInWithGoogleOAuth,
   signOutUser,
   syncUserProgressWithCloud,
+  updateUserDisplayName,
   UserProfile,
 } from "@/lib/dataService";
 
@@ -46,96 +57,18 @@ function GoogleIcon({ className = "w-4 h-4" }: { className?: string }) {
   );
 }
 
-export default function AuthUserTrigger({
-  compact = false,
+export function UserAvatar({
+  user,
+  sizeClass = "w-9 h-9 rounded-xl text-xs",
+  showOnlineDot = false,
 }: {
-  compact?: boolean;
+  user: UserProfile;
+  sizeClass?: string;
+  showOnlineDot?: boolean;
 }) {
-  const [user, setUser] = useState<UserProfile | null>(null);
-  const [openModal, setOpenModal] = useState(false);
-  const [emailInput, setEmailInput] = useState("");
-  const [nameInput, setNameInput] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [googleOAuthEnabled, setGoogleOAuthEnabled] = useState<boolean>(false);
-  const [showOAuthHelp, setShowOAuthHelp] = useState(false);
-  const [oauthNotice, setOauthNotice] = useState<string | null>(null);
-  const [syncSuccess, setSyncSuccess] = useState(false);
-  const emailInputRef = useRef<HTMLInputElement | null>(null);
+  const [imgError, setImgError] = useState(false);
 
-  async function refreshUser() {
-    const u = await getCurrentUser();
-    setUser(u);
-  }
-
-  useEffect(() => {
-    refreshUser();
-    isGoogleOAuthEnabledOnSupabase().then((enabled) => {
-      setGoogleOAuthEnabled(enabled);
-    });
-    const handler = () => refreshUser();
-    window.addEventListener("speakflow-auth-changed", handler);
-    return () => window.removeEventListener("speakflow-auth-changed", handler);
-  }, []);
-
-  useEffect(() => {
-    if (openModal && !user) {
-      setTimeout(() => {
-        emailInputRef.current?.focus();
-      }, 100);
-    }
-  }, [openModal, user]);
-
-  async function handleGoogleOAuth() {
-    // If the user already typed their Gmail, sign them in immediately!
-    if (emailInput.trim() && emailInput.includes("@")) {
-      setLoading(true);
-      const profile = await signInWithGmailCloudSync(emailInput, nameInput);
-      setUser(profile);
-      setLoading(false);
-      setOpenModal(false);
-      return;
-    }
-
-    setLoading(true);
-    setOauthNotice(null);
-    const res = await signInWithGoogleOAuth();
-    setLoading(false);
-
-    if (!res.ok) {
-      setOauthNotice(
-        res.error ||
-          "Hãy nhập địa chỉ Gmail của bạn vào ô bên dưới để đăng nhập và đồng bộ tiến trình lên Supabase Cloud ngay lập tức!"
-      );
-      emailInputRef.current?.focus();
-    }
-  }
-
-  async function handleQuickGmailSync(e: React.FormEvent) {
-    e.preventDefault();
-    if (!emailInput.trim()) return;
-    setLoading(true);
-    const profile = await signInWithGmailCloudSync(emailInput, nameInput);
-    setUser(profile);
-    setLoading(false);
-    setOpenModal(false);
-  }
-
-  async function handleManualSync() {
-    if (!user) return;
-    setLoading(true);
-    await syncUserProgressWithCloud(user);
-    setLoading(false);
-    setSyncSuccess(true);
-    setTimeout(() => setSyncSuccess(false), 2500);
-  }
-
-  async function handleLogout() {
-    await signOutUser();
-    setUser(null);
-    setOpenModal(false);
-  }
-
-  const initials = user?.full_name
+  const initials = user.full_name
     ? user.full_name
         .split(" ")
         .map((n) => n[0])
@@ -145,47 +78,332 @@ export default function AuthUserTrigger({
     : "SF";
 
   return (
+    <div className="relative shrink-0 inline-flex">
+      {user.avatar_url && !imgError ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={user.avatar_url}
+          alt={user.full_name}
+          referrerPolicy="no-referrer"
+          onError={() => setImgError(true)}
+          className={`${sizeClass} object-cover shrink-0 shadow border border-emerald-400/40`}
+        />
+      ) : (
+        <div
+          className={`${sizeClass} bg-gradient-to-br from-sky-500 to-indigo-600 text-white font-bold flex items-center justify-center shrink-0 shadow border border-white/15`}
+        >
+          {initials}
+        </div>
+      )}
+      {showOnlineDot && (
+        <span
+          title="Đã đăng nhập Google"
+          className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-400 ring-2 ring-slate-950 shadow-[0_0_8px_#34d399]"
+        />
+      )}
+    </div>
+  );
+}
+
+export default function AuthUserTrigger({
+  compact = false,
+}: {
+  compact?: boolean;
+}) {
+  const [user, setUser] = useState<UserProfile | null>(null);
+  const [progress, setProgress] = useState<AccountProgressSummary | null>(null);
+  const [openModal, setOpenModal] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [googleOAuthEnabled, setGoogleOAuthEnabled] = useState<boolean>(true);
+  const [oauthError, setOauthError] = useState<string | null>(null);
+  const [syncSuccess, setSyncSuccess] = useState(false);
+  const [copiedCallback, setCopiedCallback] = useState(false);
+
+  // Editing display name state
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState("");
+
+  const callbackUrl = getSupabaseCallbackUrl();
+
+  const syncFromLocalCache = useCallback(() => {
+    const immediateUser = getStoredUserProfile();
+    const immediateSummary = getInitialAccountProgressSummary();
+    setUser(immediateUser);
+    setProgress(immediateSummary);
+    if (immediateUser) {
+      setNameDraft(immediateUser.full_name);
+    }
+  }, []);
+
+  const refreshUserAndProgress = useCallback(async () => {
+    syncFromLocalCache();
+
+    const [u, enabled] = await Promise.all([
+      getCurrentUser(),
+      isGoogleOAuthEnabledOnSupabase(),
+    ]);
+    setUser(u);
+    setProgress(getInitialAccountProgressSummary());
+    setGoogleOAuthEnabled(enabled);
+    if (u) {
+      setNameDraft(u.full_name);
+    }
+  }, [syncFromLocalCache]);
+
+  useEffect(() => {
+    void refreshUserAndProgress();
+    const handler = () => syncFromLocalCache();
+    window.addEventListener("speakflow-auth-changed", handler);
+    return () => window.removeEventListener("speakflow-auth-changed", handler);
+  }, [refreshUserAndProgress, syncFromLocalCache]);
+
+  async function handleTriggerGoogleLogin(forceRedirect = false) {
+    setLoading(true);
+    setOauthError(null);
+
+    const res = await signInWithGoogleOAuth({ forceRedirect });
+
+    if (!res.ok) {
+      setLoading(false);
+      if (res.providerDisabled) {
+        setGoogleOAuthEnabled(false);
+      }
+      setOauthError(
+        res.error || "Không thể khởi tạo kết nối đăng nhập với Google."
+      );
+      setOpenModal(true);
+    }
+  }
+
+  async function handlePrimaryButtonClick() {
+    if (user) {
+      setOpenModal(true);
+      void refreshUserAndProgress();
+      return;
+    }
+
+    setLoading(true);
+    const enabled = await isGoogleOAuthEnabledOnSupabase();
+    setGoogleOAuthEnabled(enabled);
+
+    if (enabled) {
+      await handleTriggerGoogleLogin(true);
+    } else {
+      setLoading(false);
+      setOpenModal(true);
+    }
+  }
+
+  async function handleSaveDisplayName(e: React.FormEvent) {
+    e.preventDefault();
+    if (!nameDraft.trim()) return;
+    setLoading(true);
+    const updated = await updateUserDisplayName(nameDraft);
+    if (updated) {
+      setUser(updated);
+    }
+    setIsEditingName(false);
+    setLoading(false);
+  }
+
+  async function handleManualSync() {
+    if (!user) return;
+    setLoading(true);
+    await syncUserProgressWithCloud(user);
+    await refreshUserAndProgress();
+    setLoading(false);
+    setSyncSuccess(true);
+    setTimeout(() => setSyncSuccess(false), 2500);
+  }
+
+  async function handleLogout(e?: React.MouseEvent) {
+    if (e) {
+      e.stopPropagation();
+    }
+    setLoading(true);
+    await signOutUser();
+    setUser(null);
+    await refreshUserAndProgress();
+    setLoading(false);
+    setOpenModal(false);
+  }
+
+  function handleCopyCallbackUrl() {
+    if (typeof navigator !== "undefined" && navigator.clipboard) {
+      navigator.clipboard.writeText(callbackUrl);
+      setCopiedCallback(true);
+      setTimeout(() => setCopiedCallback(false), 2000);
+    }
+  }
+
+  return (
     <>
       {user ? (
+        compact ? (
+          /* ================= COMPACT TOP-RIGHT LOGGED-IN PILL ================= */
+          <div className="inline-flex items-center gap-1.5 rounded-2xl border border-emerald-500/40 bg-emerald-950/40 p-1 pr-2 shadow-sm">
+            <button
+              type="button"
+              onClick={handlePrimaryButtonClick}
+              className="flex items-center gap-2 px-1.5 py-0.5 rounded-xl hover:bg-emerald-500/15 transition-all text-left"
+              title="Xem hồ sơ & tiến độ đã lưu"
+            >
+              <UserAvatar
+                user={user}
+                sizeClass="w-7 h-7 rounded-lg text-[11px]"
+                showOnlineDot
+              />
+              <div className="min-w-0 max-w-[130px] sm:max-w-[160px]">
+                <div className="flex items-center gap-1">
+                  <span className="text-xs font-extrabold text-white truncate">
+                    {user.full_name}
+                  </span>
+                </div>
+                <p className="text-[10px] font-semibold text-emerald-300 truncate flex items-center gap-1">
+                  <CheckCircle2 className="w-2.5 h-2.5 shrink-0 text-emerald-400" />
+                  <span>Đã đăng nhập</span>
+                </p>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleLogout}
+              disabled={loading}
+              title="Đăng xuất tài khoản Google"
+              className="p-1.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/30 text-rose-300 border border-rose-500/30 transition-colors"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        ) : (
+          /* ================= SIDEBAR FULL LOGGED-IN ACCOUNT CARD ================= */
+          <div className="rounded-2xl border border-emerald-500/40 bg-gradient-to-br from-emerald-950/50 via-slate-900/95 to-slate-900 p-3.5 space-y-3 shadow-lg shadow-emerald-950/20">
+            {/* Status Header Badge */}
+            <div className="flex items-center justify-between gap-2">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wide bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                Đã đăng nhập Google
+              </span>
+              <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-sky-300">
+                <Cloud className="w-3 h-3" />
+                <span>Đã đồng bộ</span>
+              </span>
+            </div>
+
+            {/* User Avatar + Name + Email */}
+            <div
+              onClick={handlePrimaryButtonClick}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  handlePrimaryButtonClick();
+                }
+              }}
+              className="flex items-center gap-3 cursor-pointer group"
+            >
+              <UserAvatar
+                user={user}
+                sizeClass="w-10 h-10 rounded-xl text-xs"
+                showOnlineDot
+              />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-extrabold text-white truncate group-hover:text-sky-300 transition-colors">
+                  {user.full_name}
+                </p>
+                <p className="text-[11px] text-slate-300 truncate">
+                  {user.email}
+                </p>
+              </div>
+              <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-white shrink-0" />
+            </div>
+
+            {/* Mini Saved Progress Bar */}
+            <div className="grid grid-cols-2 gap-1.5 bg-slate-950/80 border border-slate-800/90 rounded-xl p-2 text-[11px]">
+              <div className="flex items-center gap-1.5 text-amber-300 font-bold px-1">
+                <Flame className="w-3.5 h-3.5 text-amber-400 fill-amber-400/20 shrink-0" />
+                <span className="truncate">
+                  Streak: {progress?.currentStreak || 1} ngày
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5 text-sky-300 font-bold px-1 border-l border-slate-800">
+                <BookOpenCheck className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+                <span className="truncate">
+                  Lưu: {progress?.practicedCards || 0}/
+                  {progress?.totalCards || 100} câu
+                </span>
+              </div>
+            </div>
+
+            {/* Direct Action Buttons: Hồ sơ & Đăng xuất */}
+            <div className="grid grid-cols-2 gap-2 pt-0.5">
+              <button
+                type="button"
+                onClick={handlePrimaryButtonClick}
+                className="py-2 px-2.5 rounded-xl bg-sky-500/15 hover:bg-sky-500/25 text-sky-300 border border-sky-500/30 font-bold text-[11px] flex items-center justify-center gap-1.5 transition-all"
+              >
+                <UserCheck className="w-3.5 h-3.5 shrink-0" />
+                <span>Hồ sơ & Tiến độ</span>
+              </button>
+              <button
+                type="button"
+                disabled={loading}
+                onClick={handleLogout}
+                className="py-2 px-2.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30 font-bold text-[11px] flex items-center justify-center gap-1.5 transition-all"
+              >
+                <LogOut className="w-3.5 h-3.5 shrink-0" />
+                <span>Đăng xuất</span>
+              </button>
+            </div>
+          </div>
+        )
+      ) : compact ? (
+        /* ================= COMPACT LOGGED-OUT BUTTON ================= */
         <button
           type="button"
-          onClick={() => setOpenModal(true)}
-          className={`flex items-center gap-2.5 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/15 transition-all text-left ${
-            compact ? "px-2.5 py-1.5" : "w-full p-3"
-          }`}
+          disabled={loading}
+          onClick={handlePrimaryButtonClick}
+          className="flex items-center justify-center gap-2 rounded-2xl bg-white hover:bg-slate-100 text-slate-950 font-bold transition-all shadow-md active:scale-[0.98] disabled:opacity-70 px-3.5 py-2 text-xs"
         >
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-sky-500 to-indigo-600 text-white font-bold text-xs flex items-center justify-center shrink-0 shadow">
-            {initials}
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-xs font-bold text-white truncate">
-              {user.full_name}
-            </p>
-            {!compact && (
-              <p className="text-[11px] text-emerald-300 truncate flex items-center gap-1">
-                <Cloud className="w-3 h-3 shrink-0" />
-                <span>Đã lưu Cloud ({user.email})</span>
-              </p>
-            )}
-          </div>
+          {loading ? (
+            <Loader2 className="w-4 h-4 animate-spin text-slate-800 shrink-0" />
+          ) : (
+            <GoogleIcon className="w-4 h-4 shrink-0" />
+          )}
+          <span>{loading ? "Đang kết nối..." : "Đăng nhập Google"}</span>
         </button>
       ) : (
-        <button
-          type="button"
-          onClick={() => setOpenModal(true)}
-          className={`flex items-center justify-center gap-2 rounded-2xl bg-white hover:bg-slate-100 text-slate-950 font-bold transition-all shadow-md active:scale-[0.98] ${
-            compact ? "px-3 py-1.5 text-xs" : "w-full py-2.5 px-4 text-xs"
-          }`}
-        >
-          <GoogleIcon className="w-4 h-4 shrink-0" />
-          <span>Đăng nhập Google</span>
-        </button>
+        /* ================= SIDEBAR LOGGED-OUT BOX ================= */
+        <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-3 space-y-2.5">
+          <div className="flex items-center justify-between text-[11px]">
+            <span className="inline-flex items-center gap-1.5 text-amber-300 font-semibold">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+              Chưa đăng nhập
+            </span>
+            <span className="text-slate-400">Lưu tạm trên máy</span>
+          </div>
+
+          <button
+            type="button"
+            disabled={loading}
+            onClick={handlePrimaryButtonClick}
+            className="w-full py-2.5 px-4 rounded-xl bg-white hover:bg-slate-100 text-slate-950 font-extrabold text-xs flex items-center justify-center gap-2 transition-all shadow-md active:scale-[0.98] disabled:opacity-70"
+          >
+            {loading ? (
+              <Loader2 className="w-4 h-4 animate-spin text-slate-800 shrink-0" />
+            ) : (
+              <GoogleIcon className="w-4 h-4 shrink-0" />
+            )}
+            <span>{loading ? "Đang gọi Google..." : "Đăng nhập Google"}</span>
+          </button>
+        </div>
       )}
 
-      {/* AUTH & SYNC MODAL */}
+      {/* AUTH & CLOUD PROGRESS MODAL */}
       {openModal && (
         <div className="fixed inset-0 z-[100] bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-5 shadow-2xl relative animate-fadeIn">
+          <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-5 shadow-2xl relative animate-fadeIn max-h-[90vh] overflow-y-auto">
             <button
               type="button"
               onClick={() => setOpenModal(false)}
@@ -195,43 +413,144 @@ export default function AuthUserTrigger({
             </button>
 
             {user ? (
-              /* LOGGED IN PROFILE VIEW */
+              /* ================= LOGGED IN GOOGLE ACCOUNT & SAVED PROGRESS VIEW ================= */
               <div className="space-y-5">
-                <div className="flex items-center gap-3.5">
-                  <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-sky-500 to-indigo-600 text-white font-extrabold text-lg flex items-center justify-center shadow-lg">
-                    {initials}
-                  </div>
-                  <div className="min-w-0">
+                <div className="flex items-center gap-3.5 pr-8">
+                  <UserAvatar
+                    user={user}
+                    sizeClass="w-14 h-14 rounded-2xl text-lg"
+                    showOnlineDot
+                  />
+                  <div className="min-w-0 flex-1">
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
                       <CheckCircle2 className="w-3 h-3" />
-                      Đã đồng bộ Supabase Cloud
+                      Đang đăng nhập Google
                     </span>
-                    <h3 className="text-base font-extrabold text-white truncate mt-1">
-                      {user.full_name}
-                    </h3>
+
+                    {isEditingName ? (
+                      <form
+                        onSubmit={handleSaveDisplayName}
+                        className="mt-1.5 flex items-center gap-1.5"
+                      >
+                        <input
+                          type="text"
+                          value={nameDraft}
+                          onChange={(e) => setNameDraft(e.target.value)}
+                          className="w-full bg-slate-950 border border-sky-500 rounded-lg px-2.5 py-1 text-xs text-white focus:outline-none"
+                          placeholder="Tên hiển thị"
+                          autoFocus
+                        />
+                        <button
+                          type="submit"
+                          className="px-2.5 py-1 rounded-lg bg-sky-500 text-slate-950 font-bold text-xs shrink-0"
+                        >
+                          Lưu
+                        </button>
+                      </form>
+                    ) : (
+                      <div className="flex items-center gap-1.5 mt-1">
+                        <h3 className="text-base font-extrabold text-white truncate">
+                          {user.full_name}
+                        </h3>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setNameDraft(user.full_name);
+                            setIsEditingName(true);
+                          }}
+                          className="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-sky-300"
+                          title="Đổi tên hiển thị"
+                        >
+                          <Pencil className="w-3 h-3" />
+                        </button>
+                      </div>
+                    )}
+
                     <p className="text-xs text-slate-400 truncate">
                       {user.email}
                     </p>
                   </div>
                 </div>
 
-                <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4 space-y-2 text-xs text-slate-300">
-                  <p className="font-semibold text-sky-300 flex items-center gap-1.5">
-                    <Cloud className="w-4 h-4" />
-                    Đồng bộ đa thiết bị (PC & Điện thoại)
-                  </p>
-                  <p className="text-slate-400 leading-relaxed">
-                    Mọi thẻ bạn ôn tập (SM-2 Box, ngày ôn tiếp theo) và chuỗi
-                    ngày học (Streak) đang được lưu tự động theo tài khoản{" "}
-                    <strong className="text-white">{user.email}</strong> trên
-                    bảng <code>user_card_progress</code> của Supabase.
+                {/* Saved Account Progress Breakdown */}
+                <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-bold text-sky-300 flex items-center gap-1.5">
+                      <Cloud className="w-4 h-4" />
+                      <span>Tiến độ học đã lưu theo tài khoản</span>
+                    </p>
+                    {progress?.lastSyncedAt && (
+                      <span className="text-[10px] text-slate-400">
+                        Đồng bộ:{" "}
+                        {new Date(progress.lastSyncedAt).toLocaleTimeString(
+                          "vi-VN",
+                          {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          }
+                        )}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="bg-slate-900/90 border border-slate-800/80 rounded-xl p-2.5 text-center">
+                      <div className="flex items-center justify-center gap-1 text-amber-400 font-extrabold text-base">
+                        <Flame className="w-4 h-4 fill-amber-400/20" />
+                        <span>{progress?.currentStreak || 1}</span>
+                      </div>
+                      <p className="text-[10px] text-slate-400 mt-0.5">
+                        Ngày liên tiếp
+                      </p>
+                    </div>
+
+                    <div className="bg-slate-900/90 border border-slate-800/80 rounded-xl p-2.5 text-center">
+                      <div className="flex items-center justify-center gap-1 text-sky-400 font-extrabold text-base">
+                        <BookOpenCheck className="w-4 h-4" />
+                        <span>
+                          {progress?.practicedCards || 0}/
+                          {progress?.totalCards || 100}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-slate-400 mt-0.5">
+                        Mẫu câu đã học
+                      </p>
+                    </div>
+
+                    <div className="bg-slate-900/90 border border-slate-800/80 rounded-xl p-2.5 text-center">
+                      <div className="flex items-center justify-center gap-1 text-emerald-400 font-extrabold text-base">
+                        <Trophy className="w-4 h-4" />
+                        <span>{progress?.masteredCards || 0}</span>
+                      </div>
+                      <p className="text-[10px] text-slate-400 mt-0.5">
+                        Câu thành thạo
+                      </p>
+                    </div>
+                  </div>
+
+                  <p className="text-[11px] text-slate-400 leading-relaxed pt-1 border-t border-slate-800/80">
+                    Hôm nay đã ôn:{" "}
+                    <strong className="text-white">
+                      {progress?.todayReviewedCount || 0} thẻ
+                    </strong>{" "}
+                    • Cần ôn hôm nay:{" "}
+                    <strong className="text-amber-300">
+                      {progress?.dueCards || 0} thẻ
+                    </strong>
+                    . Toàn bộ thông tin hồ sơ, chuỗi Streak ({" "}
+                    <code>user_stats</code> ) và tiến độ SM-2 từng thẻ ({" "}
+                    <code>user_card_progress</code> ) được lưu tự động trên
+                    Supabase Cloud.
                   </p>
                 </div>
 
                 {syncSuccess && (
                   <div className="bg-emerald-500/15 border border-emerald-500/30 rounded-xl p-3 text-xs text-emerald-300 font-semibold flex items-center gap-2">
                     <CheckCircle2 className="w-4 h-4" />
-                    <span>Đã đồng bộ toàn bộ tiến trình học lên Cloud!</span>
+                    <span>
+                      Đã đồng bộ hồ sơ & toàn bộ tiến trình học lên Supabase
+                      Cloud!
+                    </span>
                   </div>
                 )}
 
@@ -245,10 +564,11 @@ export default function AuthUserTrigger({
                     <RefreshCw
                       className={`w-4 h-4 ${loading ? "animate-spin" : ""}`}
                     />
-                    <span>Đồng bộ ngay</span>
+                    <span>Đồng bộ tiến độ ngay</span>
                   </button>
                   <button
                     type="button"
+                    disabled={loading}
                     onClick={handleLogout}
                     className="py-3 px-4 rounded-2xl bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30 font-bold text-xs flex items-center justify-center gap-1.5 transition-all"
                   >
@@ -258,129 +578,130 @@ export default function AuthUserTrigger({
                 </div>
               </div>
             ) : (
-              /* SIGN IN VIEW */
+              /* ================= GOOGLE OAUTH SIGN-IN VIEW ================= */
               <div className="space-y-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-11 h-11 rounded-2xl bg-white flex items-center justify-center shadow-md shrink-0">
+                <div className="flex items-center gap-3 pr-8">
+                  <div className="w-12 h-12 rounded-2xl bg-white flex items-center justify-center shadow-md shrink-0">
                     <GoogleIcon className="w-6 h-6" />
                   </div>
                   <div className="space-y-0.5">
                     <h3 className="text-base md:text-lg font-extrabold text-white">
-                      Đăng nhập bằng Tài khoản Google
+                      Đăng nhập bằng Google
                     </h3>
                     <p className="text-xs text-slate-400">
-                      Đồng bộ lịch ôn tập SM-2 & Streak giữa PC và Điện thoại
+                      Xác thực qua Google OAuth & lưu tiến độ học lên Cloud
                     </p>
                   </div>
                 </div>
 
-                {/* Primary Instant Gmail Sign-In Form (Always works 100% without needing Google Cloud Console Client ID) */}
-                <form onSubmit={handleQuickGmailSync} className="space-y-3.5">
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
-                      <Mail className="w-3.5 h-3.5 text-sky-400" />
-                      <span>Nhập địa chỉ Gmail của bạn *</span>
-                    </label>
-                    <input
-                      ref={emailInputRef}
-                      type="email"
-                      required
-                      placeholder="tenban@gmail.com"
-                      value={emailInput}
-                      onChange={(e) => setEmailInput(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-700/90 rounded-xl px-3.5 py-3 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
-                    />
-                  </div>
+                <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4 space-y-2 text-xs text-slate-300">
+                  <p className="font-semibold text-sky-300 flex items-center gap-1.5">
+                    <Cloud className="w-4 h-4" />
+                    <span>Quyền lợi khi đăng nhập Google:</span>
+                  </p>
+                  <ul className="space-y-1.5 text-slate-400 list-disc list-inside leading-relaxed">
+                    <li>
+                      Tự động lưu hồ sơ Google (Tên, Email, Ảnh đại diện) vào{" "}
+                      <code className="text-sky-300">user_stats</code>.
+                    </li>
+                    <li>
+                      Lưu lịch ôn tập Spaced Repetition (SM-2) của từng thẻ vào{" "}
+                      <code className="text-sky-300">user_card_progress</code>.
+                    </li>
+                    <li>
+                      Đồng bộ chuỗi ngày học (Streak) và kết quả Phản xạ 60s
+                      xuyên suốt giữa máy tính (PC) và điện thoại.
+                    </li>
+                  </ul>
+                </div>
 
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
-                      <UserIcon className="w-3.5 h-3.5 text-indigo-400" />
-                      <span>Tên hiển thị của bạn (Tuỳ chọn)</span>
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="VD: Minh Quang"
-                      value={nameInput}
-                      onChange={(e) => setNameInput(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-sky-500"
-                    />
-                  </div>
-
-                  <button
-                    type="submit"
-                    disabled={loading}
-                    className="w-full py-3.5 px-4 rounded-2xl bg-white hover:bg-slate-100 text-slate-950 font-extrabold text-xs md:text-sm flex items-center justify-center gap-2.5 shadow-lg active:scale-[0.99] transition-all"
-                  >
+                {/* Primary Google OAuth Button */}
+                <button
+                  type="button"
+                  disabled={loading}
+                  onClick={() => handleTriggerGoogleLogin(true)}
+                  className="w-full py-3.5 px-4 rounded-2xl bg-white hover:bg-slate-100 text-slate-950 font-extrabold text-xs md:text-sm flex items-center justify-center gap-2.5 shadow-lg active:scale-[0.99] transition-all disabled:opacity-60"
+                >
+                  {loading ? (
+                    <Loader2 className="w-4 h-4 animate-spin text-slate-900" />
+                  ) : (
                     <GoogleIcon className="w-4 h-4" />
-                    <span>
-                      {loading
-                        ? "Đang đồng bộ lên Supabase..."
-                        : "Đăng nhập Google & Đồng bộ Cloud"}
-                    </span>
-                  </button>
-                </form>
+                  )}
+                  <span>
+                    {loading
+                      ? "Đang chuyển hướng tới Google..."
+                      : "Tiếp tục với Google (accounts.google.com)"}
+                  </span>
+                </button>
 
-                {googleOAuthEnabled ? (
-                  <div className="pt-1">
-                    <button
-                      type="button"
-                      disabled={loading}
-                      onClick={handleGoogleOAuth}
-                      className="w-full py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs flex items-center justify-center gap-2 border border-slate-700 transition-all"
-                    >
-                      <GoogleIcon className="w-3.5 h-3.5" />
-                      <span>Đăng nhập qua cửa sổ Google OAuth</span>
-                    </button>
-                  </div>
-                ) : (
-                  <div className="pt-1 border-t border-slate-800/80">
-                    <button
-                      type="button"
-                      onClick={() => setShowOAuthHelp((prev) => !prev)}
-                      className="w-full flex items-center justify-between text-[11px] text-slate-400 hover:text-slate-300 py-1"
-                    >
-                      <span>
-                        Cấu hình Google OAuth Popup (Dành cho Quản trị viên)
-                      </span>
-                      {showOAuthHelp ? (
-                        <ChevronUp className="w-3.5 h-3.5" />
-                      ) : (
-                        <ChevronDown className="w-3.5 h-3.5" />
-                      )}
-                    </button>
-
-                    {showOAuthHelp && (
-                      <div className="mt-2 bg-slate-950 border border-slate-800 rounded-2xl p-3 space-y-2 text-[11px] text-slate-400 leading-relaxed">
-                        <p>
-                          Hiện tại bạn có thể đăng nhập trực tiếp bằng Gmail ở
-                          ô phía trên (tự động đồng bộ vào bảng{" "}
-                          <code className="text-sky-300">
-                            user_card_progress
-                          </code>{" "}
-                          và <code className="text-sky-300">user_stats</code>).
+                {!googleOAuthEnabled && (
+                  <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 space-y-3 text-xs">
+                    <div className="flex items-start gap-2 text-amber-200">
+                      <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                      <div className="space-y-1">
+                        <p className="font-bold text-amber-300">
+                          Cần bật Google Provider trên Supabase Dashboard
                         </p>
-                        <p>
-                          Nếu muốn bật thêm cửa sổ chuyển hướng Google OAuth,
-                          hãy bật <strong>Google Provider</strong> trong
-                          Supabase Dashboard:
+                        <p className="text-[11px] text-amber-200/90 leading-relaxed">
+                          Hệ thống phát hiện <strong>Google Provider</strong>{" "}
+                          trên project Supabase của bạn đang ở trạng thái tắt (
+                          <code>external.google = false</code>). Hãy bật theo 2
+                          bước sau để gọi tới Google:
                         </p>
-                        <a
-                          href="https://supabase.com/dashboard/project/ncfudvrowukvppppexcf/auth/providers"
-                          target="_blank"
-                          rel="noreferrer"
-                          className="inline-flex items-center gap-1 text-sky-400 hover:underline font-semibold"
-                        >
-                          <span>Mở Supabase Auth Providers</span>
-                          <ExternalLink className="w-3 h-3" />
-                        </a>
                       </div>
-                    )}
+                    </div>
+
+                    <div className="space-y-2 bg-slate-950/90 border border-slate-800 rounded-xl p-3 text-[11px] text-slate-300">
+                      <p>
+                        <strong>Bước 1:</strong> Trong Google Cloud Console (mục{" "}
+                        <em>OAuth 2.0 Client IDs</em>), dán Callback URL này vào{" "}
+                        <strong>Authorized redirect URIs</strong>:
+                      </p>
+                      <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5">
+                        <code className="text-[10px] text-sky-300 truncate flex-1">
+                          {callbackUrl}
+                        </code>
+                        <button
+                          type="button"
+                          onClick={handleCopyCallbackUrl}
+                          className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 text-[10px] font-semibold flex items-center gap-1 shrink-0"
+                        >
+                          {copiedCallback ? (
+                            <>
+                              <Check className="w-3 h-3 text-emerald-400" />
+                              <span>Đã chép</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-3 h-3" />
+                              <span>Copy</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+
+                      <p className="pt-1">
+                        <strong>Bước 2:</strong> Mở Supabase Auth Providers, bật{" "}
+                        <strong>Enable Sign in with Google</strong>, dán{" "}
+                        <em>Client ID</em> & <em>Client Secret</em> rồi bấm{" "}
+                        <strong>Save</strong>:
+                      </p>
+                      <a
+                        href="https://supabase.com/dashboard/project/ncfudvrowukvppppexcf/auth/providers"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1.5 text-sky-400 hover:underline font-bold pt-0.5"
+                      >
+                        <span>Mở Supabase Auth Providers Dashboard</span>
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    </div>
                   </div>
                 )}
 
-                {oauthNotice && (
-                  <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-3 text-xs text-amber-200 leading-relaxed">
-                    {oauthNotice}
+                {oauthError && (
+                  <div className="bg-rose-500/10 border border-rose-500/30 rounded-2xl p-3 text-xs text-rose-200 leading-relaxed">
+                    {oauthError}
                   </div>
                 )}
               </div>
