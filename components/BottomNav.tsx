@@ -6,6 +6,7 @@ import {
   Home,
   BookOpenCheck,
   Flame,
+  MessageSquare,
   PlusSquare,
   Zap,
   Keyboard,
@@ -31,6 +32,12 @@ const NAV_ITEMS = [
     label: "Phản xạ 60s",
     desc: "Thử thách nói trong 7 giây",
     icon: Flame,
+  },
+  {
+    href: "/roleplay",
+    label: "Nhập vai",
+    desc: "Đối thoại tình huống",
+    icon: MessageSquare,
   },
   {
     href: "/manage",
@@ -165,7 +172,7 @@ export default function BottomNav() {
       {/* ================= MOBILE FIXED BOTTOM NAVIGATION (< md) ================= */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 pointer-events-none">
         <div className="max-w-md mx-auto bg-slate-950/90 backdrop-blur-xl border-t border-slate-800/80 px-2 py-2 pointer-events-auto shadow-[0_-10px_30px_rgba(0,0,0,0.6)]">
-          <div className="grid grid-cols-4 gap-1">
+          <div className="grid grid-cols-5 gap-1">
             {NAV_ITEMS.map((item) => {
               const Icon = item.icon;
               const isActive =

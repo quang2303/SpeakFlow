@@ -21,8 +21,12 @@ import {
 import {
   getCards,
   getInitialLocalData,
+  getStoredUserProfile,
+  logStudyActivity,
   saveReflexDrillProgress,
+  UserProfile,
 } from "@/lib/dataService";
+import AccountLockScreen from "@/components/AccountLockScreen";
 import { Card } from "@/lib/seedData";
 import {
   evaluatePronunciation,
@@ -59,6 +63,7 @@ function shuffleCards(arr: Card[]): Card[] {
 }
 
 export default function ReflexDrillPage() {
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [allCards, setAllCards] = useState<Card[]>([]);
   const [drillCards, setDrillCards] = useState<Card[]>([]);
   const [status, setStatus] = useState<"idle" | "running" | "finished">("idle");
@@ -85,6 +90,7 @@ export default function ReflexDrillPage() {
   const historyRef = useRef<DrillHistoryItem[]>([]);
 
   useEffect(() => {
+    setCurrentUser(getStoredUserProfile());
     setAllCards(getInitialLocalData().cards);
     async function load() {
       const cards = await getCards();
@@ -92,6 +98,7 @@ export default function ReflexDrillPage() {
     }
     void load();
     const handler = () => {
+      setCurrentUser(getStoredUserProfile());
       setAllCards(getInitialLocalData().cards);
     };
     window.addEventListener("speakflow-auth-changed", handler);
@@ -142,6 +149,23 @@ export default function ReflexDrillPage() {
       const finalScore =
         explicitScore !== undefined ? explicitScore : evalResult.score;
       const passed = finalScore >= 60;
+
+      const redWords =
+        explicitScore === 100
+          ? []
+          : evalResult.words
+              .filter((w) => w.status !== "correct")
+              .map((w) => w.cleanWord || w.originalWord);
+
+      void logStudyActivity({
+        mode: "reflex",
+        card_id: card.id,
+        phrase_en: card.phrase_en,
+        sentence_en: card.sentence_en,
+        spoken_text: spokenText || "(Hết giờ 7s)",
+        score: finalScore,
+        mispronounced_words: redWords,
+      });
 
       setLastFeedback({
         score: finalScore,
@@ -301,6 +325,10 @@ export default function ReflexDrillPage() {
           history.length
         ).toFixed(1)
       : "0.0";
+
+  if (currentUser?.status === "locked") {
+    return <AccountLockScreen user={currentUser} />;
+  }
 
   return (
     <div className="px-4 md:px-8 pt-5 md:pt-8 pb-8 space-y-6">

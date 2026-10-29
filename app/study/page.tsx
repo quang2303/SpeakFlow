@@ -28,8 +28,12 @@ import {
   getCards,
   getDecks,
   getInitialLocalData,
+  getStoredUserProfile,
+  logStudyActivity,
   submitCardReview,
+  UserProfile,
 } from "@/lib/dataService";
+import AccountLockScreen from "@/components/AccountLockScreen";
 import { Card, Deck } from "@/lib/seedData";
 import {
   generateFirstLetterHint,
@@ -243,6 +247,7 @@ function StudySessionContent() {
   const [loading, setLoading] = useState(true);
   const [sessionFinished, setSessionFinished] = useState(false);
   const [reviewedCount, setReviewedCount] = useState(0);
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
 
   // Audio & Shadowing states (Idle | Listening | Processing | Error)
   const [playingSpeed, setPlayingSpeed] = useState<"normal" | "slow" | null>(
@@ -294,8 +299,10 @@ function StudySessionContent() {
   }, [selectedDeckId, resetSpeechState]);
 
   useEffect(() => {
+    setCurrentUser(getStoredUserProfile());
     void loadStudyCards();
     const handler = () => {
+      setCurrentUser(getStoredUserProfile());
       const local = getInitialLocalData();
       setDecks(local.decks);
       const filtered =
@@ -366,6 +373,20 @@ function StudySessionContent() {
         setLiveEvaluation(null);
         setSpeechResult(evaluation);
         setMicState("idle");
+
+        const redWords = evaluation.words
+          .filter((w) => w.status !== "correct")
+          .map((w) => w.cleanWord || w.originalWord);
+
+        void logStudyActivity({
+          mode: "shadowing",
+          card_id: currentCard.id,
+          phrase_en: currentCard.phrase_en,
+          sentence_en: currentCard.sentence_en,
+          spoken_text: finalText,
+          score: evaluation.score,
+          mispronounced_words: redWords,
+        });
       },
       onError: (errMsg) => {
         setSpeechError(errMsg);
@@ -398,6 +419,32 @@ function StudySessionContent() {
   const handleRateCard = useCallback(
     async (rating: SRSRating) => {
       if (!currentCard) return;
+
+      const redWords = speechResult
+        ? speechResult.words
+            .filter((w) => w.status !== "correct")
+            .map((w) => w.cleanWord || w.originalWord)
+        : [];
+      const fallbackScore =
+        rating === "easy"
+          ? 96
+          : rating === "good"
+          ? 85
+          : rating === "hard"
+          ? 65
+          : 45;
+
+      void logStudyActivity({
+        mode: "study",
+        card_id: currentCard.id,
+        phrase_en: currentCard.phrase_en,
+        sentence_en: currentCard.sentence_en,
+        spoken_text: transcript || undefined,
+        score: speechResult ? speechResult.score : fallbackScore,
+        rating,
+        mispronounced_words: redWords,
+      });
+
       resetSpeechState();
 
       await submitCardReview(currentCard, rating);
@@ -411,7 +458,14 @@ function StudySessionContent() {
         setSessionFinished(true);
       }
     },
-    [currentCard, currentIndex, resetSpeechState, studyQueue.length]
+    [
+      currentCard,
+      currentIndex,
+      resetSpeechState,
+      speechResult,
+      studyQueue.length,
+      transcript,
+    ]
   );
 
   // PC Keyboard Shortcuts
@@ -468,6 +522,10 @@ function StudySessionContent() {
     setSessionFinished(false);
     setReviewedCount(0);
     resetSpeechState();
+  }
+
+  if (currentUser?.status === "locked") {
+    return <AccountLockScreen user={currentUser} />;
   }
 
   if (loading) {

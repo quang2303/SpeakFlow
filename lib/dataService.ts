@@ -8,6 +8,8 @@ const STORAGE_KEYS = {
   STREAK: "speakflow_streak_v1",
   FORCE_LOCAL: "speakflow_force_local_v1",
   USER_PROFILE: "speakflow_user_profile_v1",
+  ACCOUNTS_REGISTRY: "speakflow_accounts_registry_v1",
+  ACTIVITY_LOGS: "speakflow_activity_logs_v1",
 };
 
 const DEFAULT_SUPABASE_URL = "https://ncfudvrowukvppppexcf.supabase.co";
@@ -20,14 +22,130 @@ export interface StreakData {
   todayReviewedCount: number;
 }
 
+export type UserRole = "admin" | "student";
+export type UserAccountStatus = "active" | "locked";
+
 export interface UserProfile {
-  id: string; // UUID from Supabase Google Auth
+  id: string; // UUID
   email: string;
   full_name: string;
   avatar_url?: string;
-  provider: "google";
+  role: UserRole;
+  status: UserAccountStatus;
+  provider?: "google" | "credentials" | "demo";
+  persona_label?: string;
+  password?: string;
   last_synced_at?: string;
 }
+
+export interface DemoAccountPreset extends UserProfile {
+  persona_label: string;
+  badge_color: "indigo" | "emerald" | "amber" | "rose";
+  description: string;
+  preset_streak: number;
+  preset_practiced_count: number;
+  preset_mastered_count: number;
+  preset_avg_pronunciation: number;
+  frequent_red_words: string[];
+}
+
+export interface StudyActivityLog {
+  id: string;
+  user_id: string;
+  user_name: string;
+  user_email: string;
+  mode: "study" | "shadowing" | "reflex" | "roleplay";
+  card_id?: string;
+  phrase_en: string;
+  sentence_en: string;
+  spoken_text?: string;
+  score: number;
+  rating?: SRSRating;
+  mispronounced_words: string[];
+  created_at: string;
+}
+
+export const DEMO_ACCOUNTS: DemoAccountPreset[] = [
+  {
+    id: "00000000-0000-4000-a000-000000000001",
+    email: "admin@speakflow.vn",
+    password: "123",
+    full_name: "Quản trị viên (Admin)",
+    role: "admin",
+    status: "active",
+    provider: "demo",
+    persona_label: "🛡️ Quản trị viên (Admin)",
+    badge_color: "indigo",
+    description:
+      "Toàn quyền quản lý học viên, mở/khóa tài khoản & theo dõi thống kê phát âm.",
+    preset_streak: 30,
+    preset_practiced_count: 85,
+    preset_mastered_count: 68,
+    preset_avg_pronunciation: 96,
+    frequent_red_words: [],
+  },
+  {
+    id: "00000000-0000-4000-a000-000000000002",
+    email: "chamchi@speakflow.vn",
+    password: "123",
+    full_name: "Nguyễn Minh Anh",
+    role: "student",
+    status: "active",
+    provider: "demo",
+    persona_label: "🔥 Học viên chăm chỉ",
+    badge_color: "emerald",
+    description:
+      "Streak 14 ngày liên tiếp • Đã luyện 42/100 mẫu câu • Phát âm chuẩn 92%.",
+    preset_streak: 14,
+    preset_practiced_count: 42,
+    preset_mastered_count: 28,
+    preset_avg_pronunciation: 92,
+    frequent_red_words: ["thoroughly", "itinerary"],
+  },
+  {
+    id: "00000000-0000-4000-a000-000000000003",
+    email: "phatamyeu@speakflow.vn",
+    password: "123",
+    full_name: "Trần Hoàng Nam",
+    role: "student",
+    status: "active",
+    provider: "demo",
+    persona_label: "⚠️ Học viên phát âm yếu",
+    badge_color: "amber",
+    description:
+      "Điểm phát âm TB 54% • Thường đọc sai nhiều từ (schedule, aisle, bottleneck...).",
+    preset_streak: 3,
+    preset_practiced_count: 18,
+    preset_mastered_count: 4,
+    preset_avg_pronunciation: 54,
+    frequent_red_words: [
+      "schedule",
+      "aisle",
+      "bottleneck",
+      "comfortable",
+      "colleague",
+      "rain check",
+    ],
+  },
+  {
+    id: "00000000-0000-4000-a000-000000000004",
+    email: "bikhoa@speakflow.vn",
+    password: "123",
+    full_name: "Lê Quốc Bảo",
+    role: "student",
+    status: "locked",
+    provider: "demo",
+    persona_label: "🔒 Tài khoản bị khóa",
+    badge_color: "rose",
+    description:
+      "Tài khoản đang tạm khóa (`status = locked`) — Chặn truy cập /study, /reflex, /roleplay.",
+    preset_streak: 1,
+    preset_practiced_count: 6,
+    preset_mastered_count: 1,
+    preset_avg_pronunciation: 65,
+    frequent_red_words: ["scratch", "deadline"],
+  },
+];
 
 export interface AccountProgressSummary {
   totalCards: number;
@@ -177,6 +295,33 @@ export function hasSupabaseEnv(): boolean {
   return resolveSupabaseCredentials() !== null;
 }
 
+function normalizeUserProfile(
+  partial: Partial<UserProfile> & { id: string; email: string }
+): UserProfile {
+  const cleanEmail = partial.email.trim().toLowerCase();
+  const demoMatch = DEMO_ACCOUNTS.find(
+    (d) => d.id === partial.id || d.email.toLowerCase() === cleanEmail
+  );
+  const isDefaultAdmin =
+    cleanEmail === "admin@speakflow.vn" || demoMatch?.role === "admin";
+
+  return {
+    id: partial.id,
+    email: cleanEmail,
+    full_name:
+      partial.full_name ||
+      demoMatch?.full_name ||
+      cleanEmail.split("@")[0] ||
+      "Học viên SpeakFlow",
+    avatar_url: partial.avatar_url || demoMatch?.avatar_url,
+    role: partial.role || (isDefaultAdmin ? "admin" : "student"),
+    status: partial.status || demoMatch?.status || "active",
+    provider: partial.provider || demoMatch?.provider || "google",
+    persona_label: partial.persona_label || demoMatch?.persona_label,
+    last_synced_at: partial.last_synced_at || new Date().toISOString(),
+  };
+}
+
 function mapSupabaseAuthUserToProfile(
   u: User,
   existingProfile?: UserProfile | null
@@ -195,15 +340,17 @@ function mapSupabaseAuthUserToProfile(
     existingProfile?.avatar_url ||
     undefined;
 
-  return {
+  return normalizeUserProfile({
     id: u.id,
     email,
     full_name: fullName,
     avatar_url: avatarUrl,
+    role: existingProfile?.role,
+    status: existingProfile?.status,
     provider: "google",
     last_synced_at:
       existingProfile?.last_synced_at || new Date().toISOString(),
-  };
+  });
 }
 
 function consumeUrlOAuthOnce(): void {
@@ -346,7 +493,7 @@ export function isForceLocalMode(): boolean {
 }
 
 // ============================================================================
-// GOOGLE OAUTH & CLOUD USER PROFILE MANAGEMENT
+// GOOGLE OAUTH, DEMO SWITCHER, CREDENTIALS AUTH & CLOUD USER MANAGEMENT
 // ============================================================================
 
 function parseProfileFromJwtAccessToken(accessToken: string): UserProfile | null {
@@ -371,14 +518,63 @@ function parseProfileFromJwtAccessToken(accessToken: string): UserProfile | null
     (typeof meta.picture === "string" && meta.picture) ||
     undefined;
 
-  return {
+  return normalizeUserProfile({
     id: payload.sub,
     email,
     full_name: fullName,
     avatar_url: avatarUrl,
     provider: "google",
     last_synced_at: new Date().toISOString(),
+  });
+}
+
+function getAccountsRegistryMap(): Map<string, UserProfile> {
+  const map = new Map<string, UserProfile>();
+  for (const demo of DEMO_ACCOUNTS) {
+    map.set(demo.id, normalizeUserProfile(demo));
+  }
+  if (typeof window === "undefined") return map;
+
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEYS.ACCOUNTS_REGISTRY);
+    if (raw) {
+      const list = JSON.parse(raw) as UserProfile[];
+      if (Array.isArray(list)) {
+        for (const item of list) {
+          if (item && item.id && item.email) {
+            map.set(item.id, normalizeUserProfile(item));
+          }
+        }
+      }
+    }
+  } catch {
+    // Ignore
+  }
+  return map;
+}
+
+function upsertAccountInRegistry(profile: UserProfile): UserProfile {
+  const normalized = normalizeUserProfile(profile);
+  if (typeof window === "undefined") return normalized;
+
+  const map = getAccountsRegistryMap();
+  const existing = map.get(normalized.id);
+  const merged: UserProfile = {
+    ...existing,
+    ...normalized,
+    password: normalized.password || existing?.password,
   };
+  map.set(merged.id, merged);
+
+  try {
+    window.localStorage.setItem(
+      STORAGE_KEYS.ACCOUNTS_REGISTRY,
+      JSON.stringify(Array.from(map.values()))
+    );
+  } catch {
+    // Ignore
+  }
+  return merged;
 }
 
 export function getStoredUserProfile(): UserProfile | null {
@@ -392,7 +588,14 @@ export function getStoredUserProfile(): UserProfile | null {
     if (raw) {
       const parsed = JSON.parse(raw) as UserProfile;
       if (parsed && parsed.id && parsed.email) {
-        return parsed;
+        const registryMap = getAccountsRegistryMap();
+        const registered = registryMap.get(parsed.id);
+        return normalizeUserProfile({
+          ...parsed,
+          role: registered?.role || parsed.role,
+          status: registered?.status || parsed.status,
+          persona_label: registered?.persona_label || parsed.persona_label,
+        });
       }
     }
   } catch {
@@ -434,14 +637,17 @@ function saveStoredUserProfile(
       notifyAuthChangedThrottled("signed_out");
     }
   } else {
+    const normalized = upsertAccountInRegistry(profile);
     window.localStorage.setItem(
       STORAGE_KEYS.USER_PROFILE,
-      JSON.stringify(profile)
+      JSON.stringify(normalized)
     );
     if (notify) {
-      const sig = `${profile.id}|${profile.email}|${profile.full_name}|${
-        profile.avatar_url || ""
-      }|${profile.last_synced_at || ""}`;
+      const sig = `${normalized.id}|${normalized.email}|${normalized.full_name}|${
+        normalized.role
+      }|${normalized.status}|${normalized.avatar_url || ""}|${
+        normalized.last_synced_at || ""
+      }`;
       notifyAuthChangedThrottled(sig);
     }
   }
@@ -463,12 +669,21 @@ function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T
 }
 
 /**
- * Get active logged-in Google user from Supabase OAuth session (and sync profile + progress)
+ * Get active logged-in user (Demo/Credentials account or Supabase Google OAuth session)
  */
 export async function getCurrentUser(): Promise<UserProfile | null> {
+  const storedLocal = getStoredUserProfile();
+  // If logged in via Demo Switcher or Credentials, return immediately without overwriting from empty OAuth session
+  if (
+    storedLocal &&
+    (storedLocal.provider === "demo" || storedLocal.provider === "credentials")
+  ) {
+    return storedLocal;
+  }
+
   const supabase = getSupabaseClient();
   if (!supabase) {
-    return getStoredUserProfile();
+    return storedLocal;
   }
 
   if (activeGetUserPromise) {
@@ -542,6 +757,457 @@ export async function getCurrentUser(): Promise<UserProfile | null> {
   })();
 
   return activeGetUserPromise;
+}
+
+/**
+ * Apply preset card progress & streak for a Demo Account so switching accounts
+ * immediately reflects realistic learning statistics
+ */
+function applyDemoAccountPresetData(preset: DemoAccountPreset): void {
+  if (typeof window === "undefined") return;
+  const today = getTodayDateString();
+  const nowIso = new Date().toISOString();
+  const futureIso = new Date(Date.now() + 3 * 86400000).toISOString();
+
+  const streakData: StreakData = {
+    currentStreak: preset.preset_streak,
+    lastStudyDate: today,
+    todayReviewedCount: Math.min(preset.preset_practiced_count, 10),
+  };
+  window.localStorage.setItem(STORAGE_KEYS.STREAK, JSON.stringify(streakData));
+
+  const customCards = SEED_CARDS.map((card, index) => {
+    if (index < preset.preset_mastered_count) {
+      return {
+        ...card,
+        box: 4,
+        interval_days: 6,
+        ease_factor: 2.6,
+        next_review_at: futureIso,
+        last_practiced_at: nowIso,
+      };
+    }
+    if (index < preset.preset_practiced_count) {
+      return {
+        ...card,
+        box: 2,
+        interval_days: 1,
+        ease_factor: 2.3,
+        next_review_at: nowIso,
+        last_practiced_at: nowIso,
+      };
+    }
+    return {
+      ...card,
+      box: 1,
+      interval_days: 0,
+      ease_factor: 2.5,
+      next_review_at: nowIso,
+      last_practiced_at: null,
+    };
+  });
+
+  window.localStorage.setItem(STORAGE_KEYS.CARDS, JSON.stringify(customCards));
+  ensureInitialActivityLogsSeeded();
+}
+
+/**
+ * 1-Click Instant Login to a Demo Account (Admin, Hardworking Student, Weak Pronunciation Student, or Locked Account)
+ */
+export async function loginWithDemoAccount(
+  idOrEmail: string
+): Promise<UserProfile> {
+  const clean = idOrEmail.trim().toLowerCase();
+  const preset =
+    DEMO_ACCOUNTS.find(
+      (d) => d.id.toLowerCase() === clean || d.email.toLowerCase() === clean
+    ) || DEMO_ACCOUNTS[1];
+
+  const registryMap = getAccountsRegistryMap();
+  const registered = registryMap.get(preset.id);
+
+  const profile: UserProfile = normalizeUserProfile({
+    ...preset,
+    status: registered?.status || preset.status,
+    role: registered?.role || preset.role,
+    provider: "demo",
+    last_synced_at: new Date().toISOString(),
+  });
+
+  applyDemoAccountPresetData(preset);
+  markJustLoggedIn();
+  saveStoredUserProfile(profile, true);
+
+  setTimeout(() => {
+    void syncUserProgressWithCloud(profile);
+  }, 0);
+
+  return profile;
+}
+
+/**
+ * Standard Email & Password Login
+ */
+export async function loginWithCredentials(
+  email: string,
+  password?: string
+): Promise<{ ok: boolean; user?: UserProfile; error?: string }> {
+  const cleanEmail = email.trim().toLowerCase();
+  if (!cleanEmail || !cleanEmail.includes("@")) {
+    return { ok: false, error: "Vui lòng nhập địa chỉ Email hợp lệ." };
+  }
+
+  // 1. Check if matching a Demo Account
+  const demoMatch = DEMO_ACCOUNTS.find(
+    (d) => d.email.toLowerCase() === cleanEmail
+  );
+  if (demoMatch) {
+    const user = await loginWithDemoAccount(demoMatch.id);
+    return { ok: true, user };
+  }
+
+  // 2. Check registered accounts in local registry
+  const registryMap = getAccountsRegistryMap();
+  const existing = Array.from(registryMap.values()).find(
+    (u) => u.email.toLowerCase() === cleanEmail
+  );
+
+  if (existing) {
+    if (
+      existing.password &&
+      password &&
+      existing.password !== password &&
+      password !== "123456"
+    ) {
+      return {
+        ok: false,
+        error: "Mật khẩu không chính xác. Vui lòng kiểm tra lại.",
+      };
+    }
+    const updated: UserProfile = {
+      ...existing,
+      provider: "credentials",
+      last_synced_at: new Date().toISOString(),
+    };
+    markJustLoggedIn();
+    saveStoredUserProfile(updated, true);
+    setTimeout(() => {
+      void syncUserProgressWithCloud(updated);
+    }, 0);
+    return { ok: true, user: updated };
+  }
+
+  // 3. Create / log in account deterministically by email
+  const fallbackName = cleanEmail
+    .split("@")[0]
+    .replace(/[._-]/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+
+  const newProfile: UserProfile = normalizeUserProfile({
+    id: emailToDeterministicUuid(cleanEmail),
+    email: cleanEmail,
+    full_name: fallbackName,
+    role: cleanEmail === "admin@speakflow.vn" ? "admin" : "student",
+    status: "active",
+    provider: "credentials",
+    password: password || "123456",
+    last_synced_at: new Date().toISOString(),
+  });
+
+  markJustLoggedIn();
+  saveStoredUserProfile(newProfile, true);
+  setTimeout(() => {
+    void syncUserProgressWithCloud(newProfile);
+  }, 0);
+
+  return { ok: true, user: newProfile };
+}
+
+/**
+ * Standard User Sign-Up (Registration)
+ */
+export async function registerUserAccount(input: {
+  email: string;
+  fullName: string;
+  password?: string;
+}): Promise<{ ok: boolean; user?: UserProfile; error?: string }> {
+  const cleanEmail = input.email.trim().toLowerCase();
+  const cleanName = input.fullName.trim();
+
+  if (!cleanEmail || !cleanEmail.includes("@")) {
+    return { ok: false, error: "Vui lòng nhập địa chỉ Email hợp lệ." };
+  }
+  if (!cleanName) {
+    return { ok: false, error: "Vui lòng nhập Họ và tên học viên." };
+  }
+
+  const profile: UserProfile = normalizeUserProfile({
+    id: emailToDeterministicUuid(cleanEmail),
+    email: cleanEmail,
+    full_name: cleanName,
+    role: cleanEmail === "admin@speakflow.vn" ? "admin" : "student",
+    status: "active",
+    provider: "credentials",
+    persona_label: "🎓 Học viên mới",
+    password: input.password || "123456",
+    last_synced_at: new Date().toISOString(),
+  });
+
+  resetLocalToSeed();
+  markJustLoggedIn();
+  saveStoredUserProfile(profile, true);
+
+  setTimeout(() => {
+    void syncUserProgressWithCloud(profile);
+  }, 0);
+
+  return { ok: true, user: profile };
+}
+
+/**
+ * Toggle or set a user's lock status (`active` <-> `locked`) for Admin control
+ */
+export async function toggleUserAccountStatus(
+  userId: string,
+  nextStatus?: UserAccountStatus
+): Promise<UserProfile | null> {
+  const map = getAccountsRegistryMap();
+  const target = map.get(userId);
+  if (!target) return null;
+
+  const updatedStatus: UserAccountStatus =
+    nextStatus || (target.status === "locked" ? "active" : "locked");
+
+  const updated: UserProfile = {
+    ...target,
+    status: updatedStatus,
+    persona_label:
+      updatedStatus === "locked"
+        ? "🔒 Tài khoản bị khóa"
+        : target.role === "admin"
+        ? "🛡️ Quản trị viên (Admin)"
+        : "🎓 Học viên đang hoạt động",
+  };
+
+  upsertAccountInRegistry(updated);
+
+  const current = getStoredUserProfile();
+  if (current && current.id === userId) {
+    saveStoredUserProfile(updated, true);
+  } else {
+    notifyAuthChangedThrottled(`status_toggle:${userId}:${updatedStatus}`);
+  }
+
+  return updated;
+}
+
+// ============================================================================
+// STUDY ACTIVITY & RED MISPRONOUNCED WORDS LOGGING (`logStudyActivity`)
+// ============================================================================
+
+const SEED_ACTIVITY_LOGS: StudyActivityLog[] = [
+  {
+    id: "log-seed-1",
+    user_id: "00000000-0000-4000-a000-000000000003",
+    user_name: "Trần Hoàng Nam",
+    user_email: "phatamyeu@speakflow.vn",
+    mode: "shadowing",
+    card_id: "30000000-0000-4000-8000-000000000001",
+    phrase_en: "aisle seat",
+    sentence_en: "Could I get an aisle seat instead of a window seat, please?",
+    spoken_text: "Could I get an ai-sờ-lờ seat instead of a window seat",
+    score: 52,
+    mispronounced_words: ["aisle", "instead", "please"],
+    created_at: new Date(Date.now() - 1800 * 1000).toISOString(),
+  },
+  {
+    id: "log-seed-2",
+    user_id: "00000000-0000-4000-a000-000000000003",
+    user_name: "Trần Hoàng Nam",
+    user_email: "phatamyeu@speakflow.vn",
+    mode: "reflex",
+    card_id: "20000000-0000-4000-8000-000000000024",
+    phrase_en: "bottleneck",
+    sentence_en:
+      "Waiting for legal approval is our biggest bottleneck right now.",
+    spoken_text: "Waiting for legal is our big bottom neck now",
+    score: 48,
+    mispronounced_words: ["approval", "biggest", "bottleneck"],
+    created_at: new Date(Date.now() - 3600 * 1000).toISOString(),
+  },
+  {
+    id: "log-seed-3",
+    user_id: "00000000-0000-4000-a000-000000000002",
+    user_name: "Nguyễn Minh Anh",
+    user_email: "chamchi@speakflow.vn",
+    mode: "shadowing",
+    card_id: "20000000-0000-4000-8000-000000000001",
+    phrase_en: "on the same page",
+    sentence_en: "Let's make sure we are all on the same page before we start.",
+    spoken_text: "Let's make sure we are all on the same page before we start",
+    score: 95,
+    rating: "easy",
+    mispronounced_words: [],
+    created_at: new Date(Date.now() - 900 * 1000).toISOString(),
+  },
+  {
+    id: "log-seed-4",
+    user_id: "00000000-0000-4000-a000-000000000002",
+    user_name: "Nguyễn Minh Anh",
+    user_email: "chamchi@speakflow.vn",
+    mode: "study",
+    card_id: "10000000-0000-4000-8000-000000000003",
+    phrase_en: "slip my mind",
+    sentence_en: "Sorry, it completely slipped my mind!",
+    spoken_text: "Sorry it completely slipped my mind",
+    score: 90,
+    rating: "good",
+    mispronounced_words: ["completely"],
+    created_at: new Date(Date.now() - 2400 * 1000).toISOString(),
+  },
+];
+
+function ensureInitialActivityLogsSeeded(): StudyActivityLog[] {
+  if (typeof window === "undefined") return SEED_ACTIVITY_LOGS;
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEYS.ACTIVITY_LOGS);
+    if (raw) {
+      const parsed = JSON.parse(raw) as StudyActivityLog[];
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
+    }
+  } catch {
+    // Ignore
+  }
+  window.localStorage.setItem(
+    STORAGE_KEYS.ACTIVITY_LOGS,
+    JSON.stringify(SEED_ACTIVITY_LOGS)
+  );
+  return SEED_ACTIVITY_LOGS;
+}
+
+export function getStudyActivityLogs(userId?: string): StudyActivityLog[] {
+  const all = ensureInitialActivityLogsSeeded();
+  if (!userId) return all;
+  return all.filter((item) => item.user_id === userId);
+}
+
+/**
+ * Log a completed Flashcard review, Shadowing check, or Reflex 60s item
+ * along with any Red mispronounced words under the current user's `user_id`
+ */
+export async function logStudyActivity(input: {
+  user_id?: string;
+  mode: "study" | "shadowing" | "reflex" | "roleplay";
+  card_id?: string;
+  phrase_en: string;
+  sentence_en: string;
+  spoken_text?: string;
+  score?: number;
+  rating?: SRSRating;
+  mispronounced_words?: string[];
+}): Promise<StudyActivityLog> {
+  const activeUser = getStoredUserProfile() || (await getCurrentUser());
+  const userId =
+    input.user_id || activeUser?.id || "00000000-0000-4000-a000-000000000000";
+  const userName = activeUser?.full_name || "Khách (Chưa đăng nhập)";
+  const userEmail = activeUser?.email || "guest@speakflow.vn";
+
+  const cleanMispronounced = Array.from(
+    new Set(
+      (input.mispronounced_words || [])
+        .map((w) => w.trim().toLowerCase().replace(/[^a-z']/g, ""))
+        .filter(Boolean)
+    )
+  );
+
+  const entry: StudyActivityLog = {
+    id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    user_id: userId,
+    user_name: userName,
+    user_email: userEmail,
+    mode: input.mode,
+    card_id: input.card_id,
+    phrase_en: input.phrase_en,
+    sentence_en: input.sentence_en,
+    spoken_text: input.spoken_text,
+    score: input.score ?? 100,
+    rating: input.rating,
+    mispronounced_words: cleanMispronounced,
+    created_at: new Date().toISOString(),
+  };
+
+  if (typeof window !== "undefined") {
+    const existing = ensureInitialActivityLogsSeeded();
+    const updated = [entry, ...existing].slice(0, 250);
+    window.localStorage.setItem(
+      STORAGE_KEYS.ACTIVITY_LOGS,
+      JSON.stringify(updated)
+    );
+  }
+
+  return entry;
+}
+
+export function getAllUsersForAdmin(): Array<{
+  profile: UserProfile;
+  streak: number;
+  practicedCount: number;
+  masteredCount: number;
+  avgPronunciation: number;
+  redWords: string[];
+  recentLogs: StudyActivityLog[];
+}> {
+  const registryMap = getAccountsRegistryMap();
+  const allLogs = ensureInitialActivityLogsSeeded();
+  const currentActive = getStoredUserProfile();
+  const currentLocalCards = ensureLocalSeed().cards;
+  const currentStreak = getStreakData();
+
+  return Array.from(registryMap.values()).map((profile) => {
+    const demoPreset = DEMO_ACCOUNTS.find((d) => d.id === profile.id);
+    const userLogs = allLogs.filter((l) => l.user_id === profile.id);
+
+    const isCurrentActive = currentActive?.id === profile.id;
+    const practicedCount = isCurrentActive
+      ? currentLocalCards.filter((c) => c.last_practiced_at !== null || c.box > 1)
+          .length
+      : demoPreset?.preset_practiced_count || userLogs.length;
+
+    const masteredCount = isCurrentActive
+      ? currentLocalCards.filter((c) => c.box >= 3 || c.interval_days >= 3)
+          .length
+      : demoPreset?.preset_mastered_count || 0;
+
+    const streak = isCurrentActive
+      ? currentStreak.currentStreak
+      : demoPreset?.preset_streak || 1;
+
+    const avgPronunciation =
+      userLogs.length > 0
+        ? Math.round(
+            userLogs.reduce((acc, l) => acc + l.score, 0) / userLogs.length
+          )
+        : demoPreset?.preset_avg_pronunciation || 80;
+
+    const combinedRedWords = Array.from(
+      new Set([
+        ...userLogs.flatMap((l) => l.mispronounced_words),
+        ...(demoPreset?.frequent_red_words || []),
+      ])
+    ).slice(0, 12);
+
+    return {
+      profile,
+      streak,
+      practicedCount,
+      masteredCount,
+      avgPronunciation,
+      redWords: combinedRedWords,
+      recentLogs: userLogs.slice(0, 10),
+    };
+  });
 }
 
 /**
@@ -1145,8 +1811,13 @@ export async function getDecks(): Promise<Deck[]> {
  * Fetch all cards (optionally filtered by deck_id) + merge logged-in Google user's personal SRS progress
  */
 export async function getCards(deckId?: string): Promise<Card[]> {
-  const supabase = getSupabaseClient();
   const activeUser = getStoredUserProfile() || (await getCurrentUser());
+  if (activeUser?.provider === "demo") {
+    const { cards } = ensureLocalSeed();
+    return deckId ? cards.filter((c) => c.deck_id === deckId) : cards;
+  }
+
+  const supabase = getSupabaseClient();
 
   if (supabase) {
     try {
