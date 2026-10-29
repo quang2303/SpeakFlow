@@ -390,7 +390,7 @@ export default function AuthUserTrigger({
           className="flex items-center justify-center gap-2 rounded-2xl bg-white hover:bg-slate-100 text-slate-950 font-bold transition-all shadow-md active:scale-[0.98] px-3.5 py-2 text-xs"
         >
           <GoogleIcon className="w-4 h-4 shrink-0" />
-          <span>Đăng nhập / Demo</span>
+          <span>Đăng nhập</span>
         </Link>
       ) : (
         /* ================= SIDEBAR LOGGED-OUT BOX ================= */
@@ -408,7 +408,7 @@ export default function AuthUserTrigger({
             className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white font-extrabold text-xs flex items-center justify-center gap-1.5 shadow-md transition-all"
           >
             <UserCheck className="w-4 h-4 shrink-0" />
-            <span>⚡ Đăng nhập / Demo 1-Click</span>
+            <span>Đăng nhập tài khoản</span>
           </Link>
 
           <button

@@ -935,7 +935,7 @@ export async function loginWithCredentials(
     ) {
       return {
         ok: false,
-        error: "Mật khẩu không chính xác. Mật khẩu mẫu là '123'.",
+        error: "Tài khoản hoặc mật khẩu không chính xác.",
       };
     }
     const user = await loginWithDemoAccount(demoMatch.id);

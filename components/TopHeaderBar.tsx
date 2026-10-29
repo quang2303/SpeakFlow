@@ -120,7 +120,7 @@ export default function TopHeaderBar() {
           <Link
             href="/login"
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-sky-500/15 hover:bg-sky-500/25 text-sky-300 border border-sky-500/30 font-bold text-xs transition-all"
-            title="Chuyển nhanh giữa các tài khoản Demo hoặc Đăng nhập"
+            title="Đăng nhập tài khoản"
           >
             {user ? (
               <>
@@ -130,7 +130,7 @@ export default function TopHeaderBar() {
             ) : (
               <>
                 <LogIn className="w-3.5 h-3.5" />
-                <span>Đăng nhập / Demo</span>
+                <span>Đăng nhập</span>
               </>
             )}
           </Link>
