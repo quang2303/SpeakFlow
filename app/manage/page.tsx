@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Database,
   HardDrive,
@@ -241,16 +241,17 @@ export default function ManageCardsPage() {
     showToast("Đã khôi phục 30 mẫu câu gốc ban đầu!");
   }
 
-  const filteredCards = cards.filter((c) => {
-    if (!searchQuery.trim()) return true;
+  const filteredCards = useMemo(() => {
+    if (!searchQuery.trim()) return cards;
     const q = searchQuery.toLowerCase();
-    return (
-      c.phrase_en.toLowerCase().includes(q) ||
-      c.sentence_en.toLowerCase().includes(q) ||
-      c.sentence_vi.toLowerCase().includes(q) ||
-      c.meaning_vi.toLowerCase().includes(q)
+    return cards.filter(
+      (c) =>
+        c.phrase_en.toLowerCase().includes(q) ||
+        c.sentence_en.toLowerCase().includes(q) ||
+        c.sentence_vi.toLowerCase().includes(q) ||
+        c.meaning_vi.toLowerCase().includes(q)
     );
-  });
+  }, [cards, searchQuery]);
 
   if (currentUser?.status === "locked") {
     return <AccountLockScreen user={currentUser} />;

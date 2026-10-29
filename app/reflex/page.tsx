@@ -88,6 +88,11 @@ export default function ReflexDrillPage() {
   const cardStartTimeRef = useRef<number>(Date.now());
   const advancingRef = useRef<boolean>(false);
   const historyRef = useRef<DrillHistoryItem[]>([]);
+  const liveTranscriptRef = useRef<string>(liveTranscript);
+
+  useEffect(() => {
+    liveTranscriptRef.current = liveTranscript;
+  }, [liveTranscript]);
 
   useEffect(() => {
     setCurrentUser(getStoredUserProfile());
@@ -271,7 +276,7 @@ export default function ReflexDrillPage() {
 
       setCardTimeLeft((prev) => {
         if (prev <= 1) {
-          advanceToNextCard(liveTranscript);
+          advanceToNextCard(liveTranscriptRef.current);
           return PER_CARD_SECONDS;
         }
         return prev - 1;
@@ -279,7 +284,7 @@ export default function ReflexDrillPage() {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [status, finishDrill, advanceToNextCard, liveTranscript]);
+  }, [status, finishDrill, advanceToNextCard]);
 
   function startDrill() {
     const practiced = allCards.filter(

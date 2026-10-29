@@ -848,6 +848,7 @@ function applyDemoAccountPresetData(preset: DemoAccountPreset): void {
   });
 
   window.localStorage.setItem(STORAGE_KEYS.CARDS, JSON.stringify(customCards));
+  memoryCachedCards = customCards;
   ensureInitialActivityLogsSeeded();
 }
 
@@ -2380,6 +2381,7 @@ export async function syncUserProgressWithCloud(
           STORAGE_KEYS.CARDS,
           JSON.stringify(mergedCards)
         );
+        memoryCachedCards = mergedCards;
       }
 
       const syncedProfile: UserProfile = {
@@ -2459,12 +2461,24 @@ export async function getAccountProgressSummary(): Promise<AccountProgressSummar
 // CORE DATA SERVICE LAYER (DECKS, CARDS & PER-USER SRS PROGRESS)
 // ============================================================================
 
+let memoryCachedDecks: Deck[] | null = null;
+let memoryCachedCards: Card[] | null = null;
+
+export function invalidateMemorySeedCache(): void {
+  memoryCachedDecks = null;
+  memoryCachedCards = null;
+}
+
 /**
- * Initialize localStorage with seed data if empty
+ * Initialize localStorage with seed data if empty (memoized in RAM for instant microsecond access)
  */
 function ensureLocalSeed(): { decks: Deck[]; cards: Card[] } {
   if (typeof window === "undefined") {
     return { decks: SEED_DECKS, cards: SEED_CARDS };
+  }
+
+  if (memoryCachedDecks && memoryCachedCards) {
+    return { decks: memoryCachedDecks, cards: memoryCachedCards };
   }
 
   let decks: Deck[] = [];
@@ -2528,6 +2542,8 @@ function ensureLocalSeed(): { decks: Deck[]; cards: Card[] } {
     window.localStorage.setItem(STORAGE_KEYS.CARDS, JSON.stringify(cards));
   }
 
+  memoryCachedDecks = decks;
+  memoryCachedCards = cards;
   return { decks, cards };
 }
 
@@ -2662,6 +2678,7 @@ export async function getCards(deckId?: string): Promise<Card[]> {
             STORAGE_KEYS.CARDS,
             JSON.stringify(baseCards)
           );
+          memoryCachedCards = baseCards;
         }
 
         if (baseCards.length > 0) {
@@ -2714,6 +2731,7 @@ export async function submitCardReview(
     const { cards } = ensureLocalSeed();
     const nextCards = cards.map((c) => (c.id === card.id ? updatedCard : c));
     window.localStorage.setItem(STORAGE_KEYS.CARDS, JSON.stringify(nextCards));
+    memoryCachedCards = nextCards;
     latestStreak = recordStudyActivity(1);
   }
 
@@ -2808,6 +2826,7 @@ export async function saveReflexDrillProgress(
       };
     });
     window.localStorage.setItem(STORAGE_KEYS.CARDS, JSON.stringify(nextCards));
+    memoryCachedCards = nextCards;
   }
 
   const supabase = getSupabaseClient();
@@ -2904,6 +2923,7 @@ export async function addCard(
     const { cards } = ensureLocalSeed();
     const updated = [newCard, ...cards];
     window.localStorage.setItem(STORAGE_KEYS.CARDS, JSON.stringify(updated));
+    memoryCachedCards = updated;
   }
 
   const supabase = getSupabaseClient();
@@ -2974,6 +2994,7 @@ export async function importCardsBatch(
     const { cards } = ensureLocalSeed();
     const updated = [...createdCards, ...cards];
     window.localStorage.setItem(STORAGE_KEYS.CARDS, JSON.stringify(updated));
+    memoryCachedCards = updated;
   }
 
   const supabase = getSupabaseClient();
@@ -3000,6 +3021,7 @@ export async function deleteCard(cardId: string): Promise<void> {
     const { cards } = ensureLocalSeed();
     const filtered = cards.filter((c) => c.id !== cardId);
     window.localStorage.setItem(STORAGE_KEYS.CARDS, JSON.stringify(filtered));
+    memoryCachedCards = filtered;
   }
 
   const supabase = getSupabaseClient();
@@ -3028,6 +3050,8 @@ export function resetLocalToSeed(): void {
   }));
   window.localStorage.setItem(STORAGE_KEYS.DECKS, JSON.stringify(SEED_DECKS));
   window.localStorage.setItem(STORAGE_KEYS.CARDS, JSON.stringify(resetCards));
+  memoryCachedDecks = SEED_DECKS;
+  memoryCachedCards = resetCards;
 }
 
 /**

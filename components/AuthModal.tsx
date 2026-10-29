@@ -88,6 +88,8 @@ export function UserAvatar({
         <img
           src={user.avatar_url}
           alt={user.full_name}
+          loading="lazy"
+          decoding="async"
           referrerPolicy="no-referrer"
           onError={() => setImgError(true)}
           className={`${sizeClass} object-cover shrink-0 shadow border border-emerald-400/40`}

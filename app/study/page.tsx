@@ -447,7 +447,7 @@ function StudySessionContent() {
 
       resetSpeechState();
 
-      await submitCardReview(currentCard, rating);
+      // Optimistic UI update: advance card immediately without awaiting cloud network round-trip
       setReviewedCount((prev) => prev + 1);
 
       if (currentIndex + 1 < studyQueue.length) {
@@ -457,6 +457,8 @@ function StudySessionContent() {
       } else {
         setSessionFinished(true);
       }
+
+      void submitCardReview(currentCard, rating);
     },
     [
       currentCard,
