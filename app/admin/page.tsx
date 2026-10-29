@@ -35,12 +35,13 @@ import {
   getStoredUserProfile,
   loginWithDemoAccount,
   resetUserProgressByAdmin,
+  toggleUserAccountRole,
   toggleUserAccountStatus,
   UserProfile,
   UserRole,
 } from "@/lib/dataService";
 import { UserAvatar } from "@/components/AuthModal";
-import { speakText } from "@/lib/speech";
+import StudentDetailModal from "@/components/admin/StudentDetailModal";
 
 type FilterOption =
   | "all"
@@ -116,12 +117,10 @@ export default function AdminDashboardPage() {
     setCurrentUser(getStoredUserProfile());
     const data = getAllUsersForAdmin();
     setStudents(data);
-    if (selectedStudent) {
-      const updatedSelected = data.find(
-        (s) => s.profile.id === selectedStudent.profile.id
-      );
-      setSelectedStudent(updatedSelected || null);
-    }
+    setSelectedStudent((prev) => {
+      if (!prev) return null;
+      return data.find((s) => s.profile.id === prev.profile.id) || null;
+    });
   }
 
   useEffect(() => {
@@ -220,6 +219,18 @@ export default function AdminDashboardPage() {
         updated.status === "locked"
           ? `🔒 Đã tạm khóa tài khoản "${updated.full_name}"`
           : `🔓 Đã mở khóa tài khoản "${updated.full_name}"`
+      );
+    }
+  }
+
+  async function handleToggleRole(item: AdminStudentMetrics) {
+    const updated = await toggleUserAccountRole(item.profile.id);
+    refreshDashboardData(false);
+    if (updated) {
+      showToast(
+        updated.role === "admin"
+          ? `🛡️ Đã cấp quyền Admin cho "${updated.full_name}"`
+          : `🎓 Đã chuyển "${updated.full_name}" sang vai trò Học viên`
       );
     }
   }
@@ -1149,107 +1160,16 @@ export default function AdminDashboardPage() {
       )}
 
       {/* ==================================================================== */}
-      {/* STUDENT QUICK DETAIL MODAL (READY FOR STEP 4 DRILL-DOWN)             */}
+      {/* STUDENT DRILL-DOWN ANALYTICS MODAL ("SOI CHI TIẾT HỌC VIÊN")          */}
       {/* ==================================================================== */}
       {selectedStudent && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4">
-          <div className="w-full max-w-2xl rounded-3xl bg-slate-900 border border-slate-800 p-6 space-y-5 shadow-2xl max-h-[88vh] overflow-y-auto">
-            <div className="flex items-start justify-between gap-3 border-b border-slate-800 pb-4">
-              <div className="flex items-center gap-3">
-                <UserAvatar
-                  user={selectedStudent.profile}
-                  sizeClass="w-12 h-12 rounded-2xl text-sm"
-                />
-                <div>
-                  <h3 className="text-lg font-extrabold text-white">
-                    {selectedStudent.profile.full_name}
-                  </h3>
-                  <p className="text-xs text-slate-400">
-                    {selectedStudent.profile.email} • Streak:{" "}
-                    <strong className="text-amber-300">
-                      🔥 {selectedStudent.streak} ngày
-                    </strong>{" "}
-                    • Phát âm TB:{" "}
-                    <strong className="text-sky-300">
-                      {selectedStudent.avgPronunciation}%
-                    </strong>
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setSelectedStudent(null)}
-                className="p-2 rounded-xl bg-slate-800 text-slate-400 hover:text-white"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* Red Mispronounced Words */}
-            <div className="space-y-2">
-              <h4 className="text-xs font-extrabold uppercase tracking-wider text-rose-400">
-                Các từ phát âm sai nhiều nhất (Red Words — Chạm để nghe):
-              </h4>
-              {selectedStudent.redWords.length === 0 ? (
-                <p className="text-xs text-slate-400">
-                  Học viên chưa có từ phát âm sai nào được ghi nhận.
-                </p>
-              ) : (
-                <div className="flex flex-wrap gap-2">
-                  {selectedStudent.redWords.map((word) => (
-                    <button
-                      key={word}
-                      type="button"
-                      onClick={() => speakText(word, 0.75)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-950/70 border border-rose-500/40 text-rose-300 text-xs font-bold hover:bg-rose-900/70"
-                    >
-                      <Volume2 className="w-3.5 h-3.5" />
-                      <span>{word}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Recent Study Logs */}
-            <div className="space-y-2">
-              <h4 className="text-xs font-extrabold uppercase tracking-wider text-sky-400">
-                Nhật ký luyện tập gần đây ({selectedStudent.recentLogs.length})
-              </h4>
-              {selectedStudent.recentLogs.length === 0 ? (
-                <p className="text-xs text-slate-400">
-                  Chưa có bản ghi luyện tập nào.
-                </p>
-              ) : (
-                <div className="space-y-2">
-                  {selectedStudent.recentLogs.map((log) => (
-                    <div
-                      key={log.id}
-                      className="p-3 rounded-2xl bg-slate-950 border border-slate-800 flex items-center justify-between gap-3"
-                    >
-                      <div className="space-y-0.5 min-w-0">
-                        <p className="text-xs font-bold text-white truncate">
-                          &ldquo;{log.sentence_en}&rdquo;
-                        </p>
-                        <p className="text-[11px] text-slate-400">
-                          Chế độ: {log.mode.toUpperCase()} •{" "}
-                          {formatRelativeTimeVi(log.created_at)}
-                        </p>
-                      </div>
-                      <span
-                        className={`px-2.5 py-1 rounded-xl text-xs font-extrabold border shrink-0 ${getPronunciationBadgeStyle(
-                          log.score
-                        )}`}
-                      >
-                        {log.score}%
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
+        <StudentDetailModal
+          student={selectedStudent}
+          onClose={() => setSelectedStudent(null)}
+          onToggleStatus={handleToggleLock}
+          onToggleRole={handleToggleRole}
+          onResetProgress={handleResetProgress}
+        />
       )}
     </div>
   );

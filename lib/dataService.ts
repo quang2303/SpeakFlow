@@ -1041,6 +1041,43 @@ export async function toggleUserAccountStatus(
   return updated;
 }
 
+/**
+ * Toggle or set a user's role (`student` <-> `admin`) for Admin control
+ */
+export async function toggleUserAccountRole(
+  userId: string,
+  nextRole?: UserRole
+): Promise<UserProfile | null> {
+  const map = getAccountsRegistryMap();
+  const target = map.get(userId);
+  if (!target) return null;
+
+  const updatedRole: UserRole =
+    nextRole || (target.role === "admin" ? "student" : "admin");
+
+  const updated: UserProfile = {
+    ...target,
+    role: updatedRole,
+    persona_label:
+      target.status === "locked"
+        ? "🔒 Tài khoản bị khóa"
+        : updatedRole === "admin"
+        ? "🛡️ Quản trị viên (Admin)"
+        : "🎓 Học viên đang hoạt động",
+  };
+
+  upsertAccountInRegistry(updated);
+
+  const current = getStoredUserProfile();
+  if (current && current.id === userId) {
+    saveStoredUserProfile(updated, true);
+  } else {
+    notifyAuthChangedThrottled(`role_toggle:${userId}:${updatedRole}`);
+  }
+
+  return updated;
+}
+
 // ============================================================================
 // STUDY ACTIVITY & RED MISPRONOUNCED WORDS LOGGING (`logStudyActivity`)
 // ============================================================================
@@ -1055,7 +1092,7 @@ const SEED_ACTIVITY_LOGS: StudyActivityLog[] = [
     card_id: "30000000-0000-4000-8000-000000000001",
     phrase_en: "aisle seat",
     sentence_en: "Could I get an aisle seat instead of a window seat, please?",
-    spoken_text: "Could I get an ai-sờ-lờ seat instead of a window seat",
+    spoken_text: "Could I get an ai-sờ-lờ seat in-sờ-tít of a window seat",
     score: 52,
     mispronounced_words: ["aisle", "instead", "please"],
     created_at: new Date(Date.now() - 1800 * 1000).toISOString(),
@@ -1070,10 +1107,40 @@ const SEED_ACTIVITY_LOGS: StudyActivityLog[] = [
     phrase_en: "bottleneck",
     sentence_en:
       "Waiting for legal approval is our biggest bottleneck right now.",
-    spoken_text: "Waiting for legal is our big bottom neck now",
+    spoken_text: "Waiting for legal up-ru-vồ is our big bottom neck now",
     score: 48,
     mispronounced_words: ["approval", "biggest", "bottleneck"],
     created_at: new Date(Date.now() - 3600 * 1000).toISOString(),
+  },
+  {
+    id: "log-seed-2b",
+    user_id: "00000000-0000-4000-a000-000000000003",
+    user_name: "Trần Hoàng Nam",
+    user_email: "phatamyeu@speakflow.vn",
+    mode: "study",
+    card_id: "20000000-0000-4000-8000-000000000005",
+    phrase_en: "tight schedule",
+    sentence_en: "We are working on a very tight schedule this week.",
+    spoken_text: "We are working on a very tai sờ-ke-đu this week",
+    score: 58,
+    rating: "hard",
+    mispronounced_words: ["schedule", "tight"],
+    created_at: new Date(Date.now() - 26 * 3600 * 1000).toISOString(),
+  },
+  {
+    id: "log-seed-2c",
+    user_id: "00000000-0000-4000-a000-000000000003",
+    user_name: "Trần Hoàng Nam",
+    user_email: "phatamyeu@speakflow.vn",
+    mode: "roleplay",
+    card_id: "rp-1",
+    phrase_en: "right on track",
+    sentence_en:
+      "I am right on track and will finish testing it this afternoon.",
+    spoken_text: "I am rai on chách and will finish test it this afternoon",
+    score: 60,
+    mispronounced_words: ["track", "testing"],
+    created_at: new Date(Date.now() - 48 * 3600 * 1000).toISOString(),
   },
   {
     id: "log-seed-3",
@@ -1099,11 +1166,69 @@ const SEED_ACTIVITY_LOGS: StudyActivityLog[] = [
     card_id: "10000000-0000-4000-8000-000000000003",
     phrase_en: "slip my mind",
     sentence_en: "Sorry, it completely slipped my mind!",
-    spoken_text: "Sorry it completely slipped my mind",
+    spoken_text: "Sorry it com-pờ-lít slipped my mind",
     score: 90,
     rating: "good",
     mispronounced_words: ["completely"],
     created_at: new Date(Date.now() - 2400 * 1000).toISOString(),
+  },
+  {
+    id: "log-seed-4b",
+    user_id: "00000000-0000-4000-a000-000000000002",
+    user_name: "Nguyễn Minh Anh",
+    user_email: "chamchi@speakflow.vn",
+    mode: "reflex",
+    card_id: "30000000-0000-4000-8000-000000000008",
+    phrase_en: "itinerary",
+    sentence_en: "Could you send me the updated travel itinerary by noon?",
+    spoken_text: "Could you send me the updated travel ai-ti-ne-ri by noon",
+    score: 88,
+    mispronounced_words: ["itinerary"],
+    created_at: new Date(Date.now() - 22 * 3600 * 1000).toISOString(),
+  },
+  {
+    id: "log-seed-4c",
+    user_id: "00000000-0000-4000-a000-000000000002",
+    user_name: "Nguyễn Minh Anh",
+    user_email: "chamchi@speakflow.vn",
+    mode: "roleplay",
+    card_id: "rp-2",
+    phrase_en: "Could I get",
+    sentence_en: "Could I get an iced oat milk latte with less sugar, please?",
+    spoken_text: "Could I get an iced oat milk latte with less sugar please",
+    score: 96,
+    mispronounced_words: [],
+    created_at: new Date(Date.now() - 45 * 3600 * 1000).toISOString(),
+  },
+  {
+    id: "log-seed-5",
+    user_id: "00000000-0000-4000-a000-000000000004",
+    user_name: "Lê Quốc Bảo",
+    user_email: "bikhoa@speakflow.vn",
+    mode: "study",
+    card_id: "20000000-0000-4000-8000-000000000010",
+    phrase_en: "from scratch",
+    sentence_en: "We had to build the entire prototype from scratch.",
+    spoken_text: "We had to build the entire pro-tô-tai from sờ-cát",
+    score: 62,
+    rating: "again",
+    mispronounced_words: ["scratch", "prototype"],
+    created_at: new Date(Date.now() - 6 * 24 * 3600 * 1000).toISOString(),
+  },
+  {
+    id: "log-seed-6",
+    user_id: "00000000-0000-4000-a000-000000000005",
+    user_name: "Phạm Thu Trang",
+    user_email: "thutrang@speakflow.vn",
+    mode: "shadowing",
+    card_id: "20000000-0000-4000-8000-000000000015",
+    phrase_en: "check my availability",
+    sentence_en:
+      "Let me check my availability and get back to you this afternoon.",
+    spoken_text: "Let me check my a-vai-bi-li-ti and get back to you",
+    score: 74,
+    mispronounced_words: ["availability"],
+    created_at: new Date(Date.now() - 5 * 24 * 3600 * 1000).toISOString(),
   },
 ];
 
@@ -1114,6 +1239,20 @@ function ensureInitialActivityLogsSeeded(): StudyActivityLog[] {
     if (raw) {
       const parsed = JSON.parse(raw) as StudyActivityLog[];
       if (Array.isArray(parsed) && parsed.length > 0) {
+        const existingIds = new Set(parsed.map((item) => item.id));
+        const overrides = getAdminOverridesMap();
+        const missingSeeds = SEED_ACTIVITY_LOGS.filter(
+          (seed) =>
+            !existingIds.has(seed.id) && !overrides[seed.user_id]?.resetAt
+        );
+        if (missingSeeds.length > 0) {
+          const merged = [...parsed, ...missingSeeds];
+          window.localStorage.setItem(
+            STORAGE_KEYS.ACTIVITY_LOGS,
+            JSON.stringify(merged)
+          );
+          return merged;
+        }
         return parsed;
       }
     }
@@ -1190,6 +1329,21 @@ export async function logStudyActivity(input: {
   return entry;
 }
 
+export interface AdminDailyActivityPoint {
+  date: string; // YYYY-MM-DD
+  dayLabel: string; // e.g., "T2", "T3", "Hôm nay"
+  phrasesCount: number;
+  minutes: number;
+}
+
+export interface AdminRedWordInsight {
+  word: string;
+  heardAs: string;
+  sentenceEn: string;
+  phraseEn: string;
+  errorCount: number;
+}
+
 export interface AdminStudentMetrics {
   profile: UserProfile;
   streak: number;
@@ -1207,7 +1361,200 @@ export interface AdminStudentMetrics {
   studiedToday: boolean;
   isAtRisk: boolean;
   redWords: string[];
+  redWordDetails: AdminRedWordInsight[];
+  dailyActivity7Days: AdminDailyActivityPoint[];
   recentLogs: StudyActivityLog[];
+}
+
+const RED_WORD_DEFAULT_CONTEXT: Record<
+  string,
+  { heardAs: string; sentenceEn: string; phraseEn: string; count: number }
+> = {
+  aisle: {
+    heardAs: "ai-sờ-lờ",
+    sentenceEn: "Could I get an aisle seat instead of a window seat, please?",
+    phraseEn: "aisle seat",
+    count: 4,
+  },
+  instead: {
+    heardAs: "in-sờ-tít",
+    sentenceEn: "Could I get an aisle seat instead of a window seat, please?",
+    phraseEn: "aisle seat",
+    count: 3,
+  },
+  bottleneck: {
+    heardAs: "bottom neck",
+    sentenceEn:
+      "Waiting for legal approval is our biggest bottleneck right now.",
+    phraseEn: "bottleneck",
+    count: 5,
+  },
+  approval: {
+    heardAs: "up-ru-vồ",
+    sentenceEn:
+      "Waiting for legal approval is our biggest bottleneck right now.",
+    phraseEn: "bottleneck",
+    count: 2,
+  },
+  biggest: {
+    heardAs: "big",
+    sentenceEn:
+      "Waiting for legal approval is our biggest bottleneck right now.",
+    phraseEn: "bottleneck",
+    count: 2,
+  },
+  schedule: {
+    heardAs: "sờ-ke-đu",
+    sentenceEn: "We are working on a very tight schedule this week.",
+    phraseEn: "tight schedule",
+    count: 4,
+  },
+  comfortable: {
+    heardAs: "com-pho-tơ-bồ",
+    sentenceEn: "Please make yourself comfortable while I grab some coffee.",
+    phraseEn: "make yourself comfortable",
+    count: 3,
+  },
+  colleague: {
+    heardAs: "co-li-gờ",
+    sentenceEn: "I will check with my colleague and get back to you shortly.",
+    phraseEn: "get back to you",
+    count: 3,
+  },
+  "rain check": {
+    heardAs: "ren chéc",
+    sentenceEn: "Can I take a rain check on dinner tonight?",
+    phraseEn: "take a rain check",
+    count: 2,
+  },
+  thoroughly: {
+    heardAs: "thơ-rô-li",
+    sentenceEn: "We need to review the contract thoroughly before signing.",
+    phraseEn: "review thoroughly",
+    count: 2,
+  },
+  itinerary: {
+    heardAs: "ai-ti-ne-ri",
+    sentenceEn: "Could you send me the updated travel itinerary by noon?",
+    phraseEn: "travel itinerary",
+    count: 3,
+  },
+  completely: {
+    heardAs: "com-pờ-lít",
+    sentenceEn: "Sorry, it completely slipped my mind!",
+    phraseEn: "slip my mind",
+    count: 2,
+  },
+  scratch: {
+    heardAs: "sờ-cát",
+    sentenceEn: "We had to build the entire prototype from scratch.",
+    phraseEn: "from scratch",
+    count: 3,
+  },
+  prototype: {
+    heardAs: "pro-tô-tai",
+    sentenceEn: "We had to build the entire prototype from scratch.",
+    phraseEn: "from scratch",
+    count: 2,
+  },
+  deadline: {
+    heardAs: "đét-lai",
+    sentenceEn: "We are trying our best to meet the Friday deadline.",
+    phraseEn: "meet the deadline",
+    count: 2,
+  },
+  availability: {
+    heardAs: "a-vai-bi-li-ti",
+    sentenceEn:
+      "Let me check my availability and get back to you this afternoon.",
+    phraseEn: "check my availability",
+    count: 3,
+  },
+  negotiate: {
+    heardAs: "ne-gô-si-ết",
+    sentenceEn: "We can negotiate better terms with the supplier next week.",
+    phraseEn: "negotiate terms",
+    count: 2,
+  },
+};
+
+function inferHeardAsFromSpoken(
+  targetWord: string,
+  spokenText?: string
+): string {
+  const cleanTarget = targetWord.toLowerCase().trim();
+  if (RED_WORD_DEFAULT_CONTEXT[cleanTarget]?.heardAs) {
+    return RED_WORD_DEFAULT_CONTEXT[cleanTarget].heardAs;
+  }
+  if (!spokenText || spokenText === "(Hết giờ 7s)") {
+    return "(Bỏ sót / Không nghe rõ)";
+  }
+  const spokenWords = spokenText
+    .split(/\s+/)
+    .map((w) => w.replace(/[.,!?;:"']/g, ""))
+    .filter(Boolean);
+  const similar = spokenWords.find(
+    (sw) =>
+      sw.toLowerCase() !== cleanTarget &&
+      sw.toLowerCase().slice(0, 2) === cleanTarget.slice(0, 2)
+  );
+  return similar || "(Phát âm lệch âm cuối)";
+}
+
+function build7DayActivityForUser(
+  email: string,
+  userLogs: StudyActivityLog[],
+  isReset: boolean
+): AdminDailyActivityPoint[] {
+  const dayNames = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
+  const points: AdminDailyActivityPoint[] = [];
+
+  // Preset baseline 7-day curves (from 6 days ago -> today)
+  let presetPhrases = [0, 0, 0, 0, 0, 0, 0];
+  let presetMinutes = [0, 0, 0, 0, 0, 0, 0];
+
+  if (!isReset) {
+    if (email === "admin@speakflow.vn") {
+      presetPhrases = [12, 14, 10, 15, 11, 13, 10];
+      presetMinutes = [45, 50, 38, 55, 42, 48, 40];
+    } else if (email === "chamchi@speakflow.vn") {
+      presetPhrases = [8, 9, 7, 10, 8, 11, 9];
+      presetMinutes = [32, 36, 28, 40, 34, 44, 38];
+    } else if (email === "phatamyeu@speakflow.vn") {
+      presetPhrases = [0, 5, 0, 0, 4, 3, 6];
+      presetMinutes = [0, 18, 0, 0, 14, 12, 24];
+    } else if (email === "bikhoa@speakflow.vn") {
+      presetPhrases = [6, 0, 0, 0, 0, 0, 0];
+      presetMinutes = [25, 0, 0, 0, 0, 0, 0];
+    } else if (email === "thutrang@speakflow.vn") {
+      presetPhrases = [9, 7, 0, 0, 0, 0, 0];
+      presetMinutes = [35, 28, 0, 0, 0, 0, 0];
+    }
+  }
+
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(Date.now() - i * 24 * 3600 * 1000);
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    const dateStr = `${yyyy}-${mm}-${dd}`;
+    const idx = 6 - i;
+
+    const logsOnDay = userLogs.filter(
+      (l) => l.created_at.slice(0, 10) === dateStr
+    );
+    const phrasesCount = Math.max(presetPhrases[idx], logsOnDay.length);
+    const minutes = Math.max(presetMinutes[idx], logsOnDay.length * 4);
+
+    points.push({
+      date: dateStr,
+      dayLabel: i === 0 ? "Hôm nay" : `${dayNames[d.getDay()]} (${dd}/${mm})`,
+      phrasesCount,
+      minutes,
+    });
+  }
+
+  return points;
 }
 
 interface AdminUserOverride {
@@ -1382,6 +1729,56 @@ export function getAllUsersForAdmin(): AdminStudentMetrics[] {
           ])
         ).slice(0, 12);
 
+    // Aggregate detailed Red Word insights from logs + preset contexts
+    const redWordMap = new Map<string, AdminRedWordInsight>();
+    for (const log of userLogs) {
+      for (const rawW of log.mispronounced_words) {
+        const w = rawW.trim().toLowerCase();
+        if (!w) continue;
+        const existing = redWordMap.get(w);
+        if (existing) {
+          existing.errorCount += 1;
+        } else {
+          const def = RED_WORD_DEFAULT_CONTEXT[w];
+          redWordMap.set(w, {
+            word: w,
+            heardAs: inferHeardAsFromSpoken(w, log.spoken_text),
+            sentenceEn: log.sentence_en || def?.sentenceEn || "",
+            phraseEn: log.phrase_en || def?.phraseEn || w,
+            errorCount: def ? Math.max(2, def.count) : 1,
+          });
+        }
+      }
+    }
+
+    if (!isReset && demoPreset) {
+      for (const presetWord of demoPreset.frequent_red_words) {
+        const w = presetWord.trim().toLowerCase();
+        if (!redWordMap.has(w)) {
+          const def = RED_WORD_DEFAULT_CONTEXT[w];
+          redWordMap.set(w, {
+            word: w,
+            heardAs: def?.heardAs || "(Phát âm chưa rõ âm cuối)",
+            sentenceEn:
+              def?.sentenceEn ||
+              `Please practice the phrase "${w}" in a full sentence.`,
+            phraseEn: def?.phraseEn || w,
+            errorCount: def?.count || 2,
+          });
+        }
+      }
+    }
+
+    const redWordDetails = Array.from(redWordMap.values()).sort(
+      (a, b) => b.errorCount - a.errorCount
+    );
+
+    const dailyActivity7Days = build7DayActivityForUser(
+      profile.email,
+      userLogs,
+      isReset
+    );
+
     return {
       profile,
       streak,
@@ -1399,7 +1796,9 @@ export function getAllUsersForAdmin(): AdminStudentMetrics[] {
       studiedToday,
       isAtRisk,
       redWords: combinedRedWords,
-      recentLogs: userLogs.slice(0, 15),
+      redWordDetails,
+      dailyActivity7Days,
+      recentLogs: userLogs.slice(0, 10),
     };
   });
 }
