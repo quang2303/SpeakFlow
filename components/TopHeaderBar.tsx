@@ -43,7 +43,7 @@ export default function TopHeaderBar() {
 
   return (
     <header className="sticky top-0 z-30 bg-slate-950/90 backdrop-blur-xl border-b border-slate-800/80 px-4 md:px-8 py-2.5">
-      <div className="max-w-md md:max-w-6xl mx-auto flex items-center justify-between gap-2.5">
+      <div className="max-w-7xl mx-auto flex items-center justify-between gap-2.5">
         {/* Left: Mobile Brand or Desktop Active Account Role Status */}
         <div className="flex items-center gap-2.5 min-w-0">
           <Link

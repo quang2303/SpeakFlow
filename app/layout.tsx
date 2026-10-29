@@ -1,8 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import BottomNav from "@/components/BottomNav";
-import TopHeaderBar from "@/components/TopHeaderBar";
+import AppLayoutShell from "@/components/AppLayoutShell";
 
 const inter = Inter({
   subsets: ["latin", "vietnamese"],
@@ -44,15 +43,7 @@ export default function RootLayout({
       <body
         className={`${inter.variable} font-sans bg-slate-950 text-slate-100 min-h-screen`}
       >
-        <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col md:flex-row">
-          <BottomNav />
-          <main className="flex-1 md:pl-72 lg:pl-80 pb-24 md:pb-10">
-            <TopHeaderBar />
-            <div className="max-w-md md:max-w-6xl mx-auto w-full">
-              {children}
-            </div>
-          </main>
-        </div>
+        <AppLayoutShell>{children}</AppLayoutShell>
       </body>
     </html>
   );

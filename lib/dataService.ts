@@ -10,6 +10,8 @@ const STORAGE_KEYS = {
   USER_PROFILE: "speakflow_user_profile_v1",
   ACCOUNTS_REGISTRY: "speakflow_accounts_registry_v1",
   ACTIVITY_LOGS: "speakflow_activity_logs_v1",
+  ADMIN_OVERRIDES: "speakflow_admin_overrides_v1",
+  ADMIN_DELETED_IDS: "speakflow_admin_deleted_ids_v1",
 };
 
 const DEFAULT_SUPABASE_URL = "https://ncfudvrowukvppppexcf.supabase.co";
@@ -528,10 +530,48 @@ function parseProfileFromJwtAccessToken(accessToken: string): UserProfile | null
   });
 }
 
+const EXTRA_SEED_ACCOUNTS: DemoAccountPreset[] = [
+  {
+    id: "00000000-0000-4000-a000-000000000005",
+    email: "thutrang@speakflow.vn",
+    password: "123",
+    full_name: "Phạm Thu Trang",
+    role: "student",
+    status: "active",
+    provider: "demo",
+    persona_label: "💤 Nghỉ quá 3 ngày",
+    badge_color: "amber",
+    description:
+      "Học viên đã nghỉ 5 ngày chưa vào ôn tập • Cần nhắc nhở duy trì Streak.",
+    preset_streak: 0,
+    preset_practiced_count: 30,
+    preset_mastered_count: 14,
+    preset_avg_pronunciation: 74,
+    frequent_red_words: ["availability", "negotiate"],
+  },
+];
+
+function getDeletedAccountIds(): Set<string> {
+  if (typeof window === "undefined") return new Set();
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEYS.ADMIN_DELETED_IDS);
+    if (raw) {
+      const parsed = JSON.parse(raw) as string[];
+      if (Array.isArray(parsed)) return new Set(parsed);
+    }
+  } catch {
+    // Ignore
+  }
+  return new Set();
+}
+
 function getAccountsRegistryMap(): Map<string, UserProfile> {
+  const deletedIds = getDeletedAccountIds();
   const map = new Map<string, UserProfile>();
-  for (const demo of DEMO_ACCOUNTS) {
-    map.set(demo.id, normalizeUserProfile(demo));
+  for (const demo of [...DEMO_ACCOUNTS, ...EXTRA_SEED_ACCOUNTS]) {
+    if (!deletedIds.has(demo.id)) {
+      map.set(demo.id, normalizeUserProfile(demo));
+    }
   }
   if (typeof window === "undefined") return map;
 
@@ -541,7 +581,7 @@ function getAccountsRegistryMap(): Map<string, UserProfile> {
       const list = JSON.parse(raw) as UserProfile[];
       if (Array.isArray(list)) {
         for (const item of list) {
-          if (item && item.id && item.email) {
+          if (item && item.id && item.email && !deletedIds.has(item.id)) {
             map.set(item.id, normalizeUserProfile(item));
           }
         }
@@ -1150,64 +1190,341 @@ export async function logStudyActivity(input: {
   return entry;
 }
 
-export function getAllUsersForAdmin(): Array<{
+export interface AdminStudentMetrics {
   profile: UserProfile;
   streak: number;
+  totalMinutes: number;
+  totalCards: number;
   practicedCount: number;
   masteredCount: number;
+  box1Count: number;
+  box23Count: number;
+  box45Count: number;
+  progressPercent: number;
   avgPronunciation: number;
+  lastActiveAt: string;
+  daysInactive: number;
+  studiedToday: boolean;
+  isAtRisk: boolean;
   redWords: string[];
   recentLogs: StudyActivityLog[];
-}> {
+}
+
+interface AdminUserOverride {
+  resetAt?: string;
+}
+
+function getAdminOverridesMap(): Record<string, AdminUserOverride> {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEYS.ADMIN_OVERRIDES);
+    if (raw) {
+      return (JSON.parse(raw) as Record<string, AdminUserOverride>) || {};
+    }
+  } catch {
+    // Ignore
+  }
+  return {};
+}
+
+function saveAdminOverridesMap(map: Record<string, AdminUserOverride>): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(
+      STORAGE_KEYS.ADMIN_OVERRIDES,
+      JSON.stringify(map)
+    );
+  } catch {
+    // Ignore
+  }
+}
+
+export function getAllUsersForAdmin(): AdminStudentMetrics[] {
   const registryMap = getAccountsRegistryMap();
   const allLogs = ensureInitialActivityLogsSeeded();
   const currentActive = getStoredUserProfile();
   const currentLocalCards = ensureLocalSeed().cards;
   const currentStreak = getStreakData();
+  const overrides = getAdminOverridesMap();
+  const allPresets = [...DEMO_ACCOUNTS, ...EXTRA_SEED_ACCOUNTS];
+  const totalCards = SEED_CARDS.length || 100;
 
   return Array.from(registryMap.values()).map((profile) => {
-    const demoPreset = DEMO_ACCOUNTS.find((d) => d.id === profile.id);
+    const demoPreset = allPresets.find((d) => d.id === profile.id);
     const userLogs = allLogs.filter((l) => l.user_id === profile.id);
-
+    const isReset = Boolean(overrides[profile.id]?.resetAt);
     const isCurrentActive = currentActive?.id === profile.id;
-    const practicedCount = isCurrentActive
-      ? currentLocalCards.filter((c) => c.last_practiced_at !== null || c.box > 1)
-          .length
-      : demoPreset?.preset_practiced_count || userLogs.length;
 
-    const masteredCount = isCurrentActive
-      ? currentLocalCards.filter((c) => c.box >= 3 || c.interval_days >= 3)
-          .length
-      : demoPreset?.preset_mastered_count || 0;
+    let practicedCount = 0;
+    let box45Count = 0;
+    let box23Count = 0;
+    let box1Count = totalCards;
+    let streak = 0;
+    let avgPronunciation = 0;
+    let totalMinutes = 0;
+    let lastActiveAt = profile.last_synced_at || new Date().toISOString();
 
-    const streak = isCurrentActive
-      ? currentStreak.currentStreak
-      : demoPreset?.preset_streak || 1;
+    if (isReset && userLogs.length === 0) {
+      practicedCount = 0;
+      box45Count = 0;
+      box23Count = 0;
+      box1Count = totalCards;
+      streak = 0;
+      avgPronunciation = 0;
+      totalMinutes = 0;
+      lastActiveAt = overrides[profile.id].resetAt || new Date().toISOString();
+    } else if (isCurrentActive) {
+      practicedCount = currentLocalCards.filter(
+        (c) => c.last_practiced_at !== null || c.box > 1
+      ).length;
+      box45Count = currentLocalCards.filter(
+        (c) => c.box >= 4 || c.interval_days >= 6
+      ).length;
+      box23Count = currentLocalCards.filter(
+        (c) =>
+          (c.box === 2 || c.box === 3) &&
+          !(c.box >= 4 || c.interval_days >= 6)
+      ).length;
+      if (box45Count === 0 && practicedCount > 0 && demoPreset) {
+        box45Count = demoPreset.preset_mastered_count;
+        box23Count = Math.max(0, practicedCount - box45Count);
+      }
+      box1Count = Math.max(0, totalCards - box45Count - box23Count);
+      streak = currentStreak.currentStreak;
+      avgPronunciation =
+        userLogs.length > 0
+          ? Math.round(
+              userLogs.reduce((acc, l) => acc + l.score, 0) / userLogs.length
+            )
+          : demoPreset?.preset_avg_pronunciation || 82;
+      totalMinutes = Math.max(
+        12,
+        practicedCount * 4 + userLogs.length * 2 + streak * 5
+      );
+      lastActiveAt =
+        userLogs[0]?.created_at ||
+        profile.last_synced_at ||
+        new Date().toISOString();
+    } else if (demoPreset) {
+      practicedCount = demoPreset.preset_practiced_count;
+      box45Count = demoPreset.preset_mastered_count;
+      box23Count = Math.max(0, practicedCount - box45Count);
+      box1Count = Math.max(0, totalCards - box45Count - box23Count);
+      streak = demoPreset.preset_streak;
+      avgPronunciation =
+        userLogs.length > 0
+          ? Math.round(
+              userLogs.reduce((acc, l) => acc + l.score, 0) / userLogs.length
+            )
+          : demoPreset.preset_avg_pronunciation;
 
-    const avgPronunciation =
-      userLogs.length > 0
-        ? Math.round(
-            userLogs.reduce((acc, l) => acc + l.score, 0) / userLogs.length
-          )
-        : demoPreset?.preset_avg_pronunciation || 80;
+      // Preset realistic study duration and last active timestamps
+      if (demoPreset.email === "admin@speakflow.vn") {
+        totalMinutes = 420;
+        lastActiveAt = new Date(Date.now() - 5 * 60 * 1000).toISOString(); // 5 mins ago
+      } else if (demoPreset.email === "chamchi@speakflow.vn") {
+        totalMinutes = 285;
+        lastActiveAt =
+          userLogs[0]?.created_at ||
+          new Date(Date.now() - 25 * 60 * 1000).toISOString(); // 25 mins ago
+      } else if (demoPreset.email === "phatamyeu@speakflow.vn") {
+        totalMinutes = 95;
+        lastActiveAt =
+          userLogs[0]?.created_at ||
+          new Date(Date.now() - 2 * 3600 * 1000).toISOString(); // 2 hours ago
+      } else if (demoPreset.email === "bikhoa@speakflow.vn") {
+        totalMinutes = 35;
+        lastActiveAt = new Date(
+          Date.now() - 6 * 24 * 3600 * 1000
+        ).toISOString(); // 6 days ago
+      } else if (demoPreset.email === "thutrang@speakflow.vn") {
+        totalMinutes = 110;
+        lastActiveAt = new Date(
+          Date.now() - 5 * 24 * 3600 * 1000
+        ).toISOString(); // 5 days ago
+      }
+    } else {
+      practicedCount = userLogs.length;
+      box45Count = userLogs.filter((l) => l.score >= 85).length;
+      box23Count = Math.max(0, practicedCount - box45Count);
+      box1Count = Math.max(0, totalCards - box45Count - box23Count);
+      streak = userLogs.length > 0 ? 1 : 0;
+      avgPronunciation =
+        userLogs.length > 0
+          ? Math.round(
+              userLogs.reduce((acc, l) => acc + l.score, 0) / userLogs.length
+            )
+          : 78;
+      totalMinutes = Math.max(5, userLogs.length * 4);
+      lastActiveAt =
+        userLogs[0]?.created_at ||
+        profile.last_synced_at ||
+        new Date().toISOString();
+    }
 
-    const combinedRedWords = Array.from(
-      new Set([
-        ...userLogs.flatMap((l) => l.mispronounced_words),
-        ...(demoPreset?.frequent_red_words || []),
-      ])
-    ).slice(0, 12);
+    const diffMs = Math.max(0, Date.now() - new Date(lastActiveAt).getTime());
+    const daysInactive = Math.floor(diffMs / (24 * 3600 * 1000));
+    const studiedToday = daysInactive === 0 && practicedCount > 0;
+    const progressPercent = Math.min(
+      100,
+      Math.round((box45Count / totalCards) * 100)
+    );
+    const isAtRisk =
+      profile.role !== "admin" &&
+      (daysInactive > 3 || (avgPronunciation > 0 && avgPronunciation < 65));
+
+    const combinedRedWords = isReset
+      ? userLogs.flatMap((l) => l.mispronounced_words)
+      : Array.from(
+          new Set([
+            ...userLogs.flatMap((l) => l.mispronounced_words),
+            ...(demoPreset?.frequent_red_words || []),
+          ])
+        ).slice(0, 12);
 
     return {
       profile,
       streak,
+      totalMinutes,
+      totalCards,
       practicedCount,
-      masteredCount,
+      masteredCount: box45Count,
+      box1Count,
+      box23Count,
+      box45Count,
+      progressPercent,
       avgPronunciation,
+      lastActiveAt,
+      daysInactive,
+      studiedToday,
+      isAtRisk,
       redWords: combinedRedWords,
-      recentLogs: userLogs.slice(0, 10),
+      recentLogs: userLogs.slice(0, 15),
     };
   });
+}
+
+/**
+ * Admin CRUD: Create a new student or admin account without switching current Admin session
+ */
+export function createAccountByAdmin(input: {
+  fullName: string;
+  email: string;
+  password?: string;
+  role: UserRole;
+}): { ok: boolean; user?: UserProfile; error?: string } {
+  const cleanName = input.fullName.trim();
+  const cleanEmail = input.email.trim().toLowerCase();
+
+  if (!cleanName) {
+    return { ok: false, error: "Vui lòng nhập Họ và tên." };
+  }
+  if (!cleanEmail || !cleanEmail.includes("@")) {
+    return { ok: false, error: "Vui lòng nhập địa chỉ Email hợp lệ." };
+  }
+
+  const map = getAccountsRegistryMap();
+  const exists = Array.from(map.values()).find(
+    (u) => u.email.toLowerCase() === cleanEmail
+  );
+  if (exists) {
+    return {
+      ok: false,
+      error: "Email này đã tồn tại trong danh sách tài khoản.",
+    };
+  }
+
+  const newId = emailToDeterministicUuid(cleanEmail);
+  // Ensure not marked as deleted if re-created
+  if (typeof window !== "undefined") {
+    const deleted = getDeletedAccountIds();
+    if (deleted.has(newId)) {
+      deleted.delete(newId);
+      window.localStorage.setItem(
+        STORAGE_KEYS.ADMIN_DELETED_IDS,
+        JSON.stringify(Array.from(deleted))
+      );
+    }
+  }
+
+  const newUser: UserProfile = normalizeUserProfile({
+    id: newId,
+    email: cleanEmail,
+    full_name: cleanName,
+    role: input.role,
+    status: "active",
+    provider: "credentials",
+    password: input.password?.trim() || "123456",
+    persona_label:
+      input.role === "admin"
+        ? "🛡️ Quản trị viên (Admin)"
+        : "🎓 Học viên mới tạo",
+    last_synced_at: new Date().toISOString(),
+  });
+
+  upsertAccountInRegistry(newUser);
+  notifyAuthChangedThrottled(`admin_create:${newUser.id}:${Date.now()}`);
+
+  return { ok: true, user: newUser };
+}
+
+/**
+ * Admin CRUD: Reset a student's learning progress & logs back to zero
+ */
+export function resetUserProgressByAdmin(userId: string): void {
+  if (typeof window === "undefined") return;
+
+  const overrides = getAdminOverridesMap();
+  overrides[userId] = { resetAt: new Date().toISOString() };
+  saveAdminOverridesMap(overrides);
+
+  // Remove activity logs for this user
+  const allLogs = ensureInitialActivityLogsSeeded();
+  const filtered = allLogs.filter((l) => l.user_id !== userId);
+  window.localStorage.setItem(
+    STORAGE_KEYS.ACTIVITY_LOGS,
+    JSON.stringify(filtered)
+  );
+
+  // If this user is currently logged in locally, reset local cards & streak too
+  const active = getStoredUserProfile();
+  if (active && active.id === userId) {
+    resetLocalToSeed();
+  }
+
+  notifyAuthChangedThrottled(`admin_reset:${userId}:${Date.now()}`);
+}
+
+/**
+ * Admin CRUD: Delete a user account from the registry
+ */
+export function deleteUserAccountByAdmin(userId: string): boolean {
+  if (typeof window === "undefined") return false;
+
+  const deleted = getDeletedAccountIds();
+  deleted.add(userId);
+  window.localStorage.setItem(
+    STORAGE_KEYS.ADMIN_DELETED_IDS,
+    JSON.stringify(Array.from(deleted))
+  );
+
+  const map = getAccountsRegistryMap();
+  map.delete(userId);
+  window.localStorage.setItem(
+    STORAGE_KEYS.ACCOUNTS_REGISTRY,
+    JSON.stringify(Array.from(map.values()))
+  );
+
+  // Remove logs of deleted user
+  const allLogs = ensureInitialActivityLogsSeeded();
+  const filteredLogs = allLogs.filter((l) => l.user_id !== userId);
+  window.localStorage.setItem(
+    STORAGE_KEYS.ACTIVITY_LOGS,
+    JSON.stringify(filteredLogs)
+  );
+
+  notifyAuthChangedThrottled(`admin_delete:${userId}:${Date.now()}`);
+  return true;
 }
 
 /**
