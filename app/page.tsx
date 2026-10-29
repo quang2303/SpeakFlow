@@ -20,6 +20,7 @@ import {
   CheckCircle2,
   Cloud,
   X,
+  Shield,
 } from "lucide-react";
 import {
   consumeJustLoggedInFlag,
@@ -153,7 +154,31 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* Top Bar (Mobile: Brand + Auth, Desktop: Welcome Header + Logged-in User Chip + Cloud Status) */}
+      {/* Admin Quick Jump Banner */}
+      {user?.role === "admin" && (
+        <div className="rounded-2xl bg-gradient-to-r from-indigo-500/20 via-purple-500/15 to-slate-900 border border-indigo-500/40 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-indigo-500/20 border border-indigo-500/40 flex items-center justify-center shrink-0">
+              <Shield className="w-5 h-5 text-indigo-400" />
+            </div>
+            <div>
+              <p className="text-sm font-extrabold text-white flex items-center gap-1.5">
+                <span>🛡️ Bạn đang đăng nhập quyền Quản trị viên (Admin)</span>
+              </p>
+              <p className="text-xs text-slate-300">
+                Theo dõi học viên, mở/khóa tài khoản và xem thống kê phát âm tại
+                Trang Quản lý.
+              </p>
+            </div>
+          </div>
+          <Link
+            href="/admin"
+            className="px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-400 hover:to-purple-500 text-white font-extrabold text-xs shadow-md shrink-0 flex items-center justify-center gap-1.5"
+          >
+            <span>Mở Bảng Quản trị (/admin) →</span>
+          </Link>
+        </div>
+      )}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center justify-between gap-2.5 md:hidden">
           <div className="flex items-center gap-2.5">

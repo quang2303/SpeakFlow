@@ -889,19 +889,55 @@ export async function loginWithDemoAccount(
  * Standard Email & Password Login
  */
 export async function loginWithCredentials(
-  email: string,
+  emailOrUsername: string,
   password?: string
 ): Promise<{ ok: boolean; user?: UserProfile; error?: string }> {
-  const cleanEmail = email.trim().toLowerCase();
-  if (!cleanEmail || !cleanEmail.includes("@")) {
-    return { ok: false, error: "Vui lòng nhập địa chỉ Email hợp lệ." };
+  let cleanInput = (emailOrUsername || "").trim().toLowerCase();
+  if (!cleanInput) {
+    return { ok: false, error: "Vui lòng nhập Email hoặc Tên tài khoản." };
+  }
+
+  // Quick aliases for demo accounts
+  if (cleanInput === "admin") {
+    cleanInput = "admin@speakflow.vn";
+  } else if (cleanInput === "chamchi") {
+    cleanInput = "chamchi@speakflow.vn";
+  } else if (cleanInput === "phatamyeu") {
+    cleanInput = "phatamyeu@speakflow.vn";
+  } else if (cleanInput === "bikhoa") {
+    cleanInput = "bikhoa@speakflow.vn";
+  } else if (cleanInput === "thutrang") {
+    cleanInput = "thutrang@speakflow.vn";
+  }
+
+  if (!cleanInput.includes("@")) {
+    return {
+      ok: false,
+      error: "Vui lòng nhập địa chỉ Email hợp lệ (hoặc nhập 'admin').",
+    };
+  }
+
+  if (!password) {
+    return { ok: false, error: "Vui lòng nhập mật khẩu." };
   }
 
   // 1. Check if matching a Demo Account
-  const demoMatch = DEMO_ACCOUNTS.find(
-    (d) => d.email.toLowerCase() === cleanEmail
+  const demoMatch = [...DEMO_ACCOUNTS, ...EXTRA_SEED_ACCOUNTS].find(
+    (d) => d.email.toLowerCase() === cleanInput || d.id === cleanInput
   );
   if (demoMatch) {
+    if (
+      demoMatch.password &&
+      password &&
+      password !== demoMatch.password &&
+      password !== "123" &&
+      password !== "123456"
+    ) {
+      return {
+        ok: false,
+        error: "Mật khẩu không chính xác. Mật khẩu mẫu là '123'.",
+      };
+    }
     const user = await loginWithDemoAccount(demoMatch.id);
     return { ok: true, user };
   }
@@ -909,7 +945,7 @@ export async function loginWithCredentials(
   // 2. Check registered accounts in local registry
   const registryMap = getAccountsRegistryMap();
   const existing = Array.from(registryMap.values()).find(
-    (u) => u.email.toLowerCase() === cleanEmail
+    (u) => u.email.toLowerCase() === cleanInput
   );
 
   if (existing) {
@@ -917,7 +953,8 @@ export async function loginWithCredentials(
       existing.password &&
       password &&
       existing.password !== password &&
-      password !== "123456"
+      password !== "123456" &&
+      password !== "123"
     ) {
       return {
         ok: false,
@@ -938,16 +975,19 @@ export async function loginWithCredentials(
   }
 
   // 3. Create / log in account deterministically by email
-  const fallbackName = cleanEmail
+  const fallbackName = cleanInput
     .split("@")[0]
     .replace(/[._-]/g, " ")
     .replace(/\b\w/g, (c) => c.toUpperCase());
 
   const newProfile: UserProfile = normalizeUserProfile({
-    id: emailToDeterministicUuid(cleanEmail),
-    email: cleanEmail,
+    id: emailToDeterministicUuid(cleanInput),
+    email: cleanInput,
     full_name: fallbackName,
-    role: cleanEmail === "admin@speakflow.vn" ? "admin" : "student",
+    role:
+      cleanInput === "admin@speakflow.vn" || cleanInput.startsWith("admin@")
+        ? "admin"
+        : "student",
     status: "active",
     provider: "credentials",
     password: password || "123456",

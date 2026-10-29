@@ -18,6 +18,8 @@ import {
   EyeOff,
   Loader2,
   Sparkles,
+  ArrowLeft,
+  Check,
 } from "lucide-react";
 import {
   DEMO_ACCOUNTS,
@@ -63,6 +65,9 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [activeDemoId, setActiveDemoId] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [successRedirectMsg, setSuccessRedirectMsg] = useState<string | null>(
+    null
+  );
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
 
   useEffect(() => {
@@ -75,40 +80,94 @@ export default function LoginPage() {
   async function handleFormSubmit(e: React.FormEvent) {
     e.preventDefault();
     setErrorMsg(null);
+    setSuccessRedirectMsg(null);
     setLoading(true);
 
     if (mode === "login") {
       const res = await loginWithCredentials(email, password);
-      setLoading(false);
       if (!res.ok || !res.user) {
+        setLoading(false);
         setErrorMsg(res.error || "Đăng nhập không thành công.");
         return;
       }
-      router.push(res.user.role === "admin" ? "/admin" : "/");
+
+      if (res.user.role === "admin") {
+        setSuccessRedirectMsg(
+          `🛡️ Đăng nhập Quản trị viên thành công! Đang chuyển hướng sang Trang Quản lý (/admin)...`
+        );
+        setTimeout(() => {
+          window.location.href = "/admin";
+        }, 350);
+      } else {
+        setSuccessRedirectMsg(
+          `🎓 Đăng nhập Học viên thành công! Đang chuyển hướng sang Trang Học tập (/)...`
+        );
+        setTimeout(() => {
+          window.location.href = "/";
+        }, 350);
+      }
     } else {
       const res = await registerUserAccount({ email, fullName, password });
-      setLoading(false);
       if (!res.ok || !res.user) {
+        setLoading(false);
         setErrorMsg(res.error || "Đăng ký không thành công.");
         return;
       }
-      router.push(res.user.role === "admin" ? "/admin" : "/");
+
+      if (res.user.role === "admin") {
+        setSuccessRedirectMsg(
+          `🛡️ Tài khoản Quản trị viên mới đã sẵn sàng! Đang chuyển hướng sang Trang Quản lý (/admin)...`
+        );
+        setTimeout(() => {
+          window.location.href = "/admin";
+        }, 350);
+      } else {
+        setSuccessRedirectMsg(
+          `🎓 Tạo tài khoản thành công! Đang chuyển hướng sang Trang Học tập (/)...`
+        );
+        setTimeout(() => {
+          window.location.href = "/";
+        }, 350);
+      }
     }
   }
 
   async function handleQuickDemoLogin(demo: DemoAccountPreset) {
     setErrorMsg(null);
+    setSuccessRedirectMsg(null);
     setActiveDemoId(demo.id);
     setLoading(true);
     const loggedInUser = await loginWithDemoAccount(demo.id);
-    setLoading(false);
-    setActiveDemoId(null);
 
     if (loggedInUser.role === "admin") {
-      router.push("/admin");
+      setSuccessRedirectMsg(
+        `🛡️ Chuyển quyền Admin thành công! Đang mở Trang Quản lý (/admin)...`
+      );
+      setTimeout(() => {
+        window.location.href = "/admin";
+      }, 350);
     } else {
-      router.push("/");
+      setSuccessRedirectMsg(
+        `🎓 Đã đăng nhập tài khoản "${loggedInUser.full_name}"! Đang mở Trang Học tập (/)...`
+      );
+      setTimeout(() => {
+        window.location.href = "/";
+      }, 350);
     }
+  }
+
+  function handleAutoFillAdmin() {
+    setMode("login");
+    setEmail("admin@speakflow.vn");
+    setPassword("123");
+    setErrorMsg(null);
+  }
+
+  function handleAutoFillStudent() {
+    setMode("login");
+    setEmail("chamchi@speakflow.vn");
+    setPassword("123");
+    setErrorMsg(null);
   }
 
   async function handleGoogleLogin() {
@@ -157,7 +216,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="px-4 md:px-8 pt-6 md:pt-10 pb-12 max-w-5xl mx-auto space-y-8">
+    <div className="px-4 md:px-8 pt-6 md:pt-10 pb-14 max-w-5xl mx-auto space-y-8">
       {/* Header Banner */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800/80 pb-5">
         <div className="flex items-center gap-3.5">
@@ -168,130 +227,46 @@ export default function LoginPage() {
           </div>
           <div>
             <h1 className="text-xl md:text-2xl font-extrabold text-white tracking-tight">
-              Đăng nhập & Chuyển đổi Tài khoản
+              Đăng nhập SpeakFlow
             </h1>
             <p className="text-xs md:text-sm text-slate-400 mt-0.5">
-              Lưu lịch ôn tập SM-2, điểm phát âm Shadowing & quản lý học viên
+              Hệ thống tự động chuyển hướng:{" "}
+              <strong className="text-indigo-300">Admin</strong> → Bảng Quản trị
+              (/admin) • <strong className="text-sky-300">Học viên</strong> →
+              Trang Học tập (/)
             </p>
           </div>
         </div>
 
         {currentUser && (
-          <div className="inline-flex items-center gap-2.5 px-3.5 py-2 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-xs">
+          <div className="inline-flex items-center gap-2.5 px-3.5 py-2 rounded-2xl bg-slate-900 border border-slate-800 text-xs">
             <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
             <div>
               <p className="font-bold text-white leading-tight">
-                Đang phiên: {currentUser.full_name}
+                Đang đăng nhập: {currentUser.full_name}
               </p>
-              <p className="text-[11px] text-emerald-300">
+              <p className="text-[11px] text-slate-400">
                 {currentUser.email} •{" "}
-                {currentUser.role === "admin" ? "Quản trị viên" : "Học viên"}
+                {currentUser.role === "admin" ? (
+                  <span className="text-indigo-300 font-extrabold">
+                    🛡️ Quản trị viên
+                  </span>
+                ) : (
+                  <span className="text-emerald-300 font-bold">
+                    🎓 Học viên
+                  </span>
+                )}
               </p>
             </div>
           </div>
         )}
       </div>
 
-      {/* Main 2-Column Layout on PC / Stacked on Mobile */}
+      {/* Main 2-Column Responsive Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-7 items-start">
-        {/* LEFT COLUMN (7 Cols): 1-CLICK QUICK DEMO SWITCHER */}
-        <div className="lg:col-span-7 space-y-4 order-1">
-          <div className="rounded-3xl bg-slate-900/90 border border-sky-500/30 p-5 md:p-6 space-y-4 shadow-xl">
-            <div className="space-y-1">
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-extrabold bg-amber-500/15 text-amber-300 border border-amber-500/30">
-                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                <span>CHẾ ĐỘ KIỂM THỬ TỨC THÌ (1-CLICK LOGIN)</span>
-              </div>
-              <h2 className="text-lg md:text-xl font-extrabold text-white pt-1">
-                ⚡ Đăng nhập nhanh để kiểm tra (Demo Accounts)
-              </h2>
-              <p className="text-xs md:text-sm text-slate-400 leading-relaxed">
-                Chạm vào bất kỳ tài khoản mẫu nào bên dưới để đăng nhập ngay lập
-                tức (không cần nhập mật khẩu) và kiểm tra phân quyền Admin / Học
-                viên / Tài khoản bị khóa:
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-              {DEMO_ACCOUNTS.map((demo) => {
-                const style = getDemoCardStyle(demo.badge_color);
-                const Icon = style.Icon;
-                const isSelected = currentUser?.id === demo.id;
-                const isLoggingIn = activeDemoId === demo.id;
-
-                return (
-                  <button
-                    key={demo.id}
-                    type="button"
-                    disabled={loading}
-                    onClick={() => handleQuickDemoLogin(demo)}
-                    className={`group text-left rounded-2xl border p-4 transition-all flex flex-col justify-between gap-3 shadow-md active:scale-[0.99] ${
-                      style.card
-                    } ${
-                      isSelected
-                        ? "ring-2 ring-sky-400 shadow-sky-500/20"
-                        : ""
-                    }`}
-                  >
-                    <div className="space-y-2.5 w-full">
-                      <div className="flex items-center justify-between gap-2">
-                        <span
-                          className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold border ${style.badge}`}
-                        >
-                          {demo.persona_label}
-                        </span>
-                        {isSelected && (
-                          <span className="text-[10px] font-bold text-sky-300 bg-sky-500/20 px-2 py-0.5 rounded-full border border-sky-500/40">
-                            Đang dùng
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="flex items-center gap-2.5">
-                        <div
-                          className={`w-10 h-10 rounded-xl border flex items-center justify-center shrink-0 ${style.iconBox}`}
-                        >
-                          <Icon className="w-5 h-5" />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <h3 className="text-sm font-extrabold text-white truncate group-hover:text-sky-300 transition-colors">
-                            {demo.full_name}
-                          </h3>
-                          <p className="text-[11px] font-mono text-slate-400 truncate">
-                            {demo.email}
-                          </p>
-                        </div>
-                      </div>
-
-                      <p className="text-xs text-slate-300 leading-relaxed">
-                        {demo.description}
-                      </p>
-                    </div>
-
-                    <div className="w-full pt-2.5 border-t border-slate-800/80 flex items-center justify-between text-xs font-bold text-sky-300 group-hover:text-white">
-                      <span>
-                        {isLoggingIn
-                          ? "Đang chuyển tài khoản..."
-                          : demo.role === "admin"
-                          ? "Vào Bảng Quản trị (/admin)"
-                          : "Đăng nhập & Học ngay (/)"}
-                      </span>
-                      {isLoggingIn ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
-                      )}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-
-        {/* RIGHT COLUMN (5 Cols): STANDARD LOGIN / SIGN UP FORM */}
-        <div className="lg:col-span-5 space-y-4 order-2">
-          <div className="rounded-3xl bg-slate-900/95 border border-slate-800 p-5 md:p-6 space-y-5 shadow-xl">
+        {/* LEFT COLUMN (6 Cols): STANDARD CREDENTIALS LOGIN / SIGN UP FORM */}
+        <div className="lg:col-span-6 space-y-4">
+          <div className="rounded-3xl bg-slate-900/95 border border-slate-800 p-5 md:p-7 space-y-5 shadow-2xl">
             {/* Mode Switch Tabs */}
             <div className="grid grid-cols-2 gap-1.5 bg-slate-950 p-1.5 rounded-2xl border border-slate-800">
               <button
@@ -299,6 +274,7 @@ export default function LoginPage() {
                 onClick={() => {
                   setMode("login");
                   setErrorMsg(null);
+                  setSuccessRedirectMsg(null);
                 }}
                 className={`py-2.5 px-3 rounded-xl text-xs font-extrabold transition-all ${
                   mode === "login"
@@ -306,13 +282,14 @@ export default function LoginPage() {
                     : "text-slate-400 hover:text-white"
                 }`}
               >
-                Đăng nhập
+                Đăng nhập tài khoản
               </button>
               <button
                 type="button"
                 onClick={() => {
                   setMode("signup");
                   setErrorMsg(null);
+                  setSuccessRedirectMsg(null);
                 }}
                 className={`py-2.5 px-3 rounded-xl text-xs font-extrabold transition-all ${
                   mode === "signup"
@@ -320,16 +297,44 @@ export default function LoginPage() {
                     : "text-slate-400 hover:text-white"
                 }`}
               >
-                Đăng ký tài khoản
+                Đăng ký tài khoản mới
               </button>
             </div>
 
+            {/* Quick Auto-fill shortcuts for convenience */}
+            {mode === "login" && (
+              <div className="space-y-2">
+                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
+                  Điền nhanh thông tin tài khoản mẫu:
+                </span>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={handleAutoFillAdmin}
+                    className="p-2.5 rounded-xl bg-indigo-500/15 hover:bg-indigo-500/25 border border-indigo-500/30 text-indigo-200 text-xs font-extrabold flex items-center justify-center gap-1.5 transition-all text-left"
+                  >
+                    <Shield className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                    <span>Điền Admin: admin / 123</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleAutoFillStudent}
+                    className="p-2.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-200 text-xs font-extrabold flex items-center justify-center gap-1.5 transition-all text-left"
+                  >
+                    <Flame className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                    <span>Điền Học viên: chamchi / 123</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Form */}
             <form onSubmit={handleFormSubmit} className="space-y-4">
               {mode === "signup" && (
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
                     <UserIcon className="w-3.5 h-3.5 text-sky-400" />
-                    <span>Họ và tên học viên</span>
+                    <span>Họ và tên</span>
                   </label>
                   <input
                     type="text"
@@ -345,15 +350,15 @@ export default function LoginPage() {
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
                   <Mail className="w-3.5 h-3.5 text-sky-400" />
-                  <span>Địa chỉ Email</span>
+                  <span>Email hoặc Tên tài khoản</span>
                 </label>
                 <input
-                  type="email"
+                  type="text"
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="VD: minhanh@speakflow.vn"
-                  className="w-full bg-slate-950 border border-slate-800 focus:border-sky-500 rounded-xl px-3.5 py-2.5 text-xs md:text-sm text-white focus:outline-none"
+                  placeholder="Nhập 'admin' hoặc email (VD: admin@speakflow.vn)"
+                  className="w-full bg-slate-950 border border-slate-800 focus:border-sky-500 rounded-xl px-3.5 py-2.5 text-xs md:text-sm text-white focus:outline-none font-medium"
                 />
               </div>
 
@@ -368,7 +373,7 @@ export default function LoginPage() {
                     required
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Nhập mật khẩu (mặc định demo: 123)"
+                    placeholder="Nhập mật khẩu (VD: 123)"
                     className="w-full bg-slate-950 border border-slate-800 focus:border-sky-500 rounded-xl pl-3.5 pr-10 py-2.5 text-xs md:text-sm text-white focus:outline-none"
                   />
                   <button
@@ -386,10 +391,31 @@ export default function LoginPage() {
                 </div>
               </div>
 
+              {/* Informational Role Redirect Box */}
+              <div className="rounded-xl bg-slate-950/80 border border-slate-800 p-3 text-[11px] text-slate-400 space-y-1">
+                <p className="flex items-center gap-1 text-indigo-300 font-bold">
+                  <Shield className="w-3 h-3 text-indigo-400" />
+                  <span>Tài khoản Admin: Tự động chuyển thẳng sang /admin</span>
+                </p>
+                <p className="flex items-center gap-1 text-slate-400">
+                  <UserIcon className="w-3 h-3 text-sky-400" />
+                  <span>Tài khoản Học viên: Chuyển sang Trang học tập (/)</span>
+                </p>
+              </div>
+
+              {/* Error Alert */}
               {errorMsg && (
                 <div className="rounded-xl bg-rose-500/10 border border-rose-500/30 p-3 text-xs text-rose-200 flex items-start gap-2">
                   <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
                   <span>{errorMsg}</span>
+                </div>
+              )}
+
+              {/* Success Redirect Alert */}
+              {successRedirectMsg && (
+                <div className="rounded-xl bg-emerald-500/15 border border-emerald-500/40 p-3 text-xs text-emerald-200 flex items-start gap-2 animate-pulse">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                  <span>{successRedirectMsg}</span>
                 </div>
               )}
 
@@ -405,8 +431,8 @@ export default function LoginPage() {
                 )}
                 <span>
                   {mode === "login"
-                    ? "Đăng nhập vào SpeakFlow"
-                    : "Tạo tài khoản & Bắt đầu học"}
+                    ? "Đăng nhập vào Hệ thống"
+                    : "Đăng ký tài khoản & Đăng nhập"}
                 </span>
               </button>
             </form>
@@ -432,10 +458,104 @@ export default function LoginPage() {
             <div className="text-center pt-1">
               <Link
                 href="/"
-                className="text-xs font-semibold text-slate-400 hover:text-sky-300"
+                className="text-xs font-semibold text-slate-400 hover:text-sky-300 inline-flex items-center gap-1"
               >
-                ← Quay về Bảng điều khiển Trang chủ
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>Quay về Bảng điều khiển Trang chủ</span>
               </Link>
+            </div>
+          </div>
+        </div>
+
+        {/* RIGHT COLUMN (6 Cols): 1-CLICK QUICK DEMO SWITCHER */}
+        <div className="lg:col-span-6 space-y-4">
+          <div className="rounded-3xl bg-slate-900/90 border border-slate-800 p-5 md:p-7 space-y-4 shadow-xl">
+            <div className="space-y-1">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-extrabold bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                <span>ĐĂNG NHẬP 1-CLICK ĐỂ TEST NHANH</span>
+              </div>
+              <h2 className="text-base md:text-lg font-extrabold text-white pt-1">
+                ⚡ Chọn nhanh tài khoản mẫu (Demo Switcher)
+              </h2>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Bạn cũng có thể chạm trực tiếp vào thẻ bất kỳ bên dưới để đăng
+                nhập tự động:
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              {DEMO_ACCOUNTS.map((demo) => {
+                const style = getDemoCardStyle(demo.badge_color);
+                const Icon = style.Icon;
+                const isSelected = currentUser?.id === demo.id;
+                const isLoggingIn = activeDemoId === demo.id;
+
+                return (
+                  <button
+                    key={demo.id}
+                    type="button"
+                    disabled={loading}
+                    onClick={() => handleQuickDemoLogin(demo)}
+                    className={`w-full group text-left rounded-2xl border p-3.5 transition-all flex flex-col justify-between gap-2.5 shadow-md active:scale-[0.99] ${
+                      style.card
+                    } ${
+                      isSelected
+                        ? "ring-2 ring-sky-400 shadow-sky-500/20"
+                        : ""
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span
+                        className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold border ${style.badge}`}
+                      >
+                        {demo.persona_label}
+                      </span>
+                      {isSelected && (
+                        <span className="text-[10px] font-bold text-sky-300 bg-sky-500/20 px-2 py-0.5 rounded-full border border-sky-500/40">
+                          Đang phiên này
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      <div
+                        className={`w-9 h-9 rounded-xl border flex items-center justify-center shrink-0 ${style.iconBox}`}
+                      >
+                        <Icon className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between">
+                          <h3 className="text-xs sm:text-sm font-extrabold text-white truncate group-hover:text-sky-300 transition-colors">
+                            {demo.full_name}
+                          </h3>
+                          <span className="text-[10px] font-mono text-slate-400">
+                            MK: {demo.password}
+                          </span>
+                        </div>
+                        <p className="text-[11px] font-mono text-slate-400 truncate">
+                          {demo.email}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="w-full pt-2 border-t border-slate-800/80 flex items-center justify-between text-[11px] font-bold text-sky-300 group-hover:text-white">
+                      <span>
+                        {isLoggingIn
+                          ? "Đang chuyển tài khoản..."
+                          : demo.role === "admin"
+                          ? "🛡️ Đăng nhập & Vào Trang Quản lý (/admin)"
+                          : "🎓 Đăng nhập & Vào Trang Học tập (/)"}
+                      </span>
+                      {isLoggingIn ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>
