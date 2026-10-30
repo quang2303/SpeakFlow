@@ -308,6 +308,19 @@ export default function ReflexDrillPage() {
     return () => clearInterval(timer);
   }, [advanceToNextCard, status]);
 
+  useEffect(() => {
+    return () => {
+      recognizerRef.current?.stop();
+      if (typeof window !== "undefined" && "speechSynthesis" in window) {
+        try {
+          window.speechSynthesis.cancel();
+        } catch {
+          // ignore
+        }
+      }
+    };
+  }, []);
+
   // Start speech recognition on card change
   useEffect(() => {
     if (status === "running" && drillCards[currentIdx]) {

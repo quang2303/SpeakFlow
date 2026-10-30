@@ -283,6 +283,19 @@ function StudySessionContent() {
   }, [selectedDeckId, resetSpeechState]);
 
   useEffect(() => {
+    return () => {
+      recognizerRef.current?.stop();
+      if (typeof window !== "undefined" && "speechSynthesis" in window) {
+        try {
+          window.speechSynthesis.cancel();
+        } catch {
+          // ignore
+        }
+      }
+    };
+  }, []);
+
+  useEffect(() => {
     setCurrentUser(getStoredUserProfile());
     void loadStudyCards();
     const handler = () => {

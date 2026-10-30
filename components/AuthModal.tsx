@@ -70,10 +70,12 @@ export function UserAvatar({
 }) {
   const [imgError, setImgError] = useState(false);
 
-  const initials = user.full_name
+  const initials = user?.full_name?.trim()
     ? user.full_name
-        .split(" ")
+        .trim()
+        .split(/\s+/)
         .map((n) => n[0])
+        .filter(Boolean)
         .join("")
         .slice(0, 2)
         .toUpperCase()
@@ -81,11 +83,11 @@ export function UserAvatar({
 
   return (
     <div className="relative shrink-0 inline-flex">
-      {user.avatar_url && !imgError ? (
+      {user?.avatar_url && !imgError ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={user.avatar_url}
-          alt={user.full_name}
+          alt={user.full_name || "User Avatar"}
           loading="lazy"
           decoding="async"
           referrerPolicy="no-referrer"

@@ -109,7 +109,16 @@ export default function ProfilePage() {
       void loadData();
     };
     window.addEventListener("speakflow-auth-changed", handleAuthChange);
-    return () => window.removeEventListener("speakflow-auth-changed", handleAuthChange);
+    return () => {
+      window.removeEventListener("speakflow-auth-changed", handleAuthChange);
+      if (typeof window !== "undefined" && "speechSynthesis" in window) {
+        try {
+          window.speechSynthesis.cancel();
+        } catch {
+          // ignore
+        }
+      }
+    };
   }, [loadData]);
 
   // Handle Save Display Name

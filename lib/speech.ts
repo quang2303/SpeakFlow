@@ -772,9 +772,38 @@ export function isSpeechRecognitionSupported(): boolean {
   );
 }
 
+interface SpeechRecognitionEvent {
+  resultIndex: number;
+  results: {
+    length: number;
+    [index: number]: {
+      [index: number]: { transcript: string };
+      isFinal: boolean;
+    };
+  };
+}
+
+interface SpeechRecognitionErrorEvent {
+  error?: string;
+  message?: string;
+}
+
+interface SpeechRecognitionInstance {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  maxAlternatives: number;
+  start: () => void;
+  stop: () => void;
+  abort: () => void;
+  onstart: (() => void) | null;
+  onresult: ((event: SpeechRecognitionEvent) => void) | null;
+  onerror: ((event: SpeechRecognitionErrorEvent) => void) | null;
+  onend: (() => void) | null;
+}
+
 // Track active recognition instance globally so starting a new one cleanly aborts any lingering session
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let activeRecognitionInstance: any = null;
+let activeRecognitionInstance: SpeechRecognitionInstance | null = null;
 
 /**
  * Start listening to user's voice using SpeechRecognition / webkitSpeechRecognition
@@ -807,10 +836,10 @@ export function startSpeechRecognition(callbacks: {
     activeRecognitionInstance = null;
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const SpeechRecognitionImpl =
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+  const SpeechRecognitionImpl = (
+    (window as unknown as Record<string, unknown>).SpeechRecognition ||
+    (window as unknown as Record<string, unknown>).webkitSpeechRecognition
+  ) as (new () => SpeechRecognitionInstance) | undefined;
 
   if (!SpeechRecognitionImpl) {
     callbacks.onStateChange?.("error");
@@ -836,8 +865,7 @@ export function startSpeechRecognition(callbacks: {
     callbacks.onStateChange?.("listening");
   };
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  recognition.onresult = (event: any) => {
+  recognition.onresult = (event: SpeechRecognitionEvent) => {
     let interim = "";
     let finalStr = "";
 
@@ -863,8 +891,7 @@ export function startSpeechRecognition(callbacks: {
     }
   };
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  recognition.onerror = (event: any) => {
+  recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
     const errCode = event?.error || "unknown";
     if (errCode === "aborted") {
       if (!finalized) {

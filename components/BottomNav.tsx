@@ -63,10 +63,30 @@ export default function BottomNav() {
   useEffect(() => {
     syncUser();
     void getCurrentUser().then((u) => setUser(u));
+    try {
+      const saved = localStorage.getItem("speakflow_sidebar_collapsed");
+      if (saved === "true") setCollapsed(true);
+    } catch {
+      // ignore
+    }
     const handleAuthChange = () => syncUser();
     window.addEventListener("speakflow-auth-changed", handleAuthChange);
     return () => window.removeEventListener("speakflow-auth-changed", handleAuthChange);
   }, [syncUser]);
+
+  function handleToggleCollapse(next: boolean) {
+    setCollapsed(next);
+    try {
+      localStorage.setItem("speakflow_sidebar_collapsed", String(next));
+    } catch {
+      // ignore
+    }
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(
+        new CustomEvent("speakflow-sidebar-toggle", { detail: { collapsed: next } })
+      );
+    }
+  }
 
   async function handleLogout() {
     await signOutUser();
@@ -113,7 +133,7 @@ export default function BottomNav() {
             {!collapsed && (
               <button
                 type="button"
-                onClick={() => setCollapsed(true)}
+                onClick={() => handleToggleCollapse(true)}
                 className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
                 title="Thu gọn thanh điều hướng"
                 aria-label="Thu gọn sidebar"
@@ -128,7 +148,7 @@ export default function BottomNav() {
             <div className="pt-2 flex justify-center">
               <button
                 type="button"
-                onClick={() => setCollapsed(false)}
+                onClick={() => handleToggleCollapse(false)}
                 className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
                 title="Mở rộng thanh điều hướng"
                 aria-label="Mở rộng sidebar"
@@ -267,7 +287,10 @@ export default function BottomNav() {
       </aside>
 
       {/* ================= MOBILE BOTTOM NAVIGATION (< md) ================= */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-md border-t border-slate-200/90 px-2 py-1.5 shadow-sm">
+      <nav
+        className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-md border-t border-slate-200/90 px-2 py-1.5 shadow-sm"
+        style={{ paddingBottom: "max(0.375rem, env(safe-area-inset-bottom))" }}
+      >
         <div className="max-w-md mx-auto grid grid-cols-5 gap-1">
           {NAV_ITEMS.map((item) => {
             const Icon = item.icon;

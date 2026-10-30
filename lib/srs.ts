@@ -92,8 +92,11 @@ export function getRatingPreviewLabel(
  * Check if a card is due for review right now
  */
 export function isCardDue(card: Card): boolean {
+  if (!card) return false;
   if (!card.next_review_at) return true;
-  return new Date(card.next_review_at).getTime() <= Date.now();
+  const time = new Date(card.next_review_at).getTime();
+  if (isNaN(time)) return true;
+  return time <= Date.now();
 }
 
 /**
@@ -101,6 +104,7 @@ export function isCardDue(card: Card): boolean {
  * e.g., "I haven't made up my mind yet." -> "I h_____ m___ u_ m_ m___ y__."
  */
 export function generateFirstLetterHint(sentence: string): string {
+  if (!sentence || typeof sentence !== "string") return "";
   return sentence
     .split(" ")
     .map((word) => {

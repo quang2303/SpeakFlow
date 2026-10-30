@@ -51,9 +51,14 @@
     --brand-700: #c2410c;
   }
 
+  html {
+    overflow-x: hidden;
+  }
+
   body {
     @apply bg-white text-slate-800 antialiased selection:bg-brand-100 selection:text-brand-700;
     -webkit-tap-highlight-color: transparent;
+    overflow-x: hidden;
   }
 }
 

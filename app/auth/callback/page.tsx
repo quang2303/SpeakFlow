@@ -69,34 +69,34 @@ export default function AuthCallbackPage() {
 
   return (
     <div className="min-h-[75vh] flex items-center justify-center px-4">
-      <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl p-7 text-center space-y-4 shadow-2xl">
+      <div className="w-full max-w-md bg-white border border-slate-200/90 rounded-3xl p-7 text-center space-y-4 shadow-sm">
         {errorMsg ? (
           <>
-            <div className="w-14 h-14 rounded-2xl bg-amber-500/15 border border-amber-500/30 mx-auto flex items-center justify-center">
-              <AlertTriangle className="w-7 h-7 text-amber-400" />
+            <div className="w-14 h-14 rounded-2xl bg-amber-50 border border-amber-200/80 mx-auto flex items-center justify-center">
+              <AlertTriangle className="w-7 h-7 text-amber-500" />
             </div>
-            <h1 className="text-lg font-extrabold text-white">
+            <h1 className="text-lg font-extrabold text-slate-900">
               Chưa hoàn tất đăng nhập Google
             </h1>
-            <p className="text-xs text-slate-300 leading-relaxed">{errorMsg}</p>
+            <p className="text-xs text-slate-600 leading-relaxed">{errorMsg}</p>
             <button
               type="button"
               onClick={() => router.replace("/")}
-              className="w-full py-3 px-4 rounded-2xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold text-xs transition-all"
+              className="w-full py-3 px-4 rounded-2xl bg-brand-500 hover:bg-brand-600 text-white font-bold text-xs transition-all shadow-xs"
             >
               Quay về Trang chủ
             </button>
           </>
         ) : (
           <>
-            <div className="w-14 h-14 rounded-2xl bg-sky-500/15 border border-sky-500/30 mx-auto flex items-center justify-center">
-              <Loader2 className="w-7 h-7 text-sky-400 animate-spin" />
+            <div className="w-14 h-14 rounded-2xl bg-brand-50 border border-brand-200/60 mx-auto flex items-center justify-center">
+              <Loader2 className="w-7 h-7 text-brand-600 animate-spin" />
             </div>
-            <h1 className="text-lg font-extrabold text-white">
+            <h1 className="text-lg font-extrabold text-slate-900">
               Đang kết nối Google Account
             </h1>
-            <p className="text-xs text-slate-300 leading-relaxed flex items-center justify-center gap-1.5">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            <p className="text-xs text-slate-600 leading-relaxed flex items-center justify-center gap-1.5">
+              <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
               <span>{statusText}</span>
             </p>
           </>

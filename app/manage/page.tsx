@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Database,
   HardDrive,
@@ -117,31 +117,31 @@ export default function ManageCardsPage() {
   // Search / Filter for Card List
   const [searchQuery, setSearchQuery] = useState("");
 
-  async function refreshData() {
+  const refreshData = useCallback(async () => {
     const [loadedDecks, loadedCards] = await Promise.all([
       getDecks(),
       getCards(),
     ]);
     setDecks(loadedDecks);
     setCards(loadedCards);
-    if (loadedDecks.length > 0 && !deckId) {
-      setDeckId(loadedDecks[0].id);
+    if (loadedDecks.length > 0) {
+      setDeckId((prev) => prev || loadedDecks[0].id);
     }
     setSupabaseConfigured(hasSupabaseEnv());
     setForcedLocal(isForceLocalMode());
     setStorageMode(getActiveStorageMode());
-  }
+  }, []);
 
   useEffect(() => {
     setCurrentUser(getStoredUserProfile());
-    refreshData();
+    void refreshData();
     const handler = () => {
       setCurrentUser(getStoredUserProfile());
-      refreshData();
+      void refreshData();
     };
     window.addEventListener("speakflow-auth-changed", handler);
     return () => window.removeEventListener("speakflow-auth-changed", handler);
-  }, []);
+  }, [refreshData]);
 
   function showToast(msg: string) {
     setStatusMessage(msg);

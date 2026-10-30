@@ -2508,7 +2508,10 @@ function ensureLocalSeed(): { decks: Deck[]; cards: Card[] } {
   try {
     const rawDecks = window.localStorage.getItem(STORAGE_KEYS.DECKS);
     if (rawDecks) {
-      decks = JSON.parse(rawDecks);
+      const parsedDecks = JSON.parse(rawDecks);
+      if (Array.isArray(parsedDecks)) {
+        decks = parsedDecks.filter((d) => d && typeof d === "object" && Boolean(d.id));
+      }
     }
     if (!Array.isArray(decks) || decks.length === 0) {
       decks = SEED_DECKS;
@@ -2551,7 +2554,10 @@ function ensureLocalSeed(): { decks: Deck[]; cards: Card[] } {
   try {
     const rawCards = window.localStorage.getItem(STORAGE_KEYS.CARDS);
     if (rawCards) {
-      cards = JSON.parse(rawCards);
+      const parsedCards = JSON.parse(rawCards);
+      if (Array.isArray(parsedCards)) {
+        cards = parsedCards.filter((c) => c && typeof c === "object" && Boolean(c.id));
+      }
     }
     if (!Array.isArray(cards) || cards.length === 0) {
       cards = SEED_CARDS;
@@ -3146,23 +3152,37 @@ export function getStreakData(): StreakData {
     if (!raw) {
       return { currentStreak: 1, lastStudyDate: null, todayReviewedCount: 0 };
     }
-    const parsed: StreakData = JSON.parse(raw);
+    const parsed = JSON.parse(raw) as Partial<StreakData> | null;
+    if (!parsed || typeof parsed !== "object") {
+      return { currentStreak: 1, lastStudyDate: null, todayReviewedCount: 0 };
+    }
+    const currentStreak =
+      typeof parsed.currentStreak === "number" && !isNaN(parsed.currentStreak)
+        ? Math.max(1, parsed.currentStreak)
+        : 1;
     const today = getTodayDateString();
     const yesterday = getYesterdayDateString();
 
     if (parsed.lastStudyDate === today) {
-      return parsed;
+      return {
+        currentStreak,
+        lastStudyDate: today,
+        todayReviewedCount:
+          typeof parsed.todayReviewedCount === "number"
+            ? parsed.todayReviewedCount
+            : 0,
+      };
     }
     if (parsed.lastStudyDate === yesterday) {
       return {
-        currentStreak: parsed.currentStreak,
+        currentStreak,
         lastStudyDate: parsed.lastStudyDate,
         todayReviewedCount: 0,
       };
     }
     return {
       currentStreak: 1,
-      lastStudyDate: parsed.lastStudyDate,
+      lastStudyDate: parsed.lastStudyDate || null,
       todayReviewedCount: 0,
     };
   } catch {

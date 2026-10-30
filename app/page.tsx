@@ -259,7 +259,7 @@ export default function HomePage() {
                     <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
                       <div
                         className="h-full bg-brand-500 rounded-full transition-all duration-300"
-                        style={{ width: `${Math.max(progressPct, 4)}%` }}
+                        style={{ width: `${progressPct}%` }}
                       />
                     </div>
                   </div>

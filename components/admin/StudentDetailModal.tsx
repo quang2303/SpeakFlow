@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import {
   X,
   Flame,
@@ -96,6 +97,18 @@ export default function StudentDetailModal({
   const u = student.profile;
   const isLocked = u.status === "locked";
   const isAdmin = u.role === "admin";
+
+  useEffect(() => {
+    return () => {
+      if (typeof window !== "undefined" && "speechSynthesis" in window) {
+        try {
+          window.speechSynthesis.cancel();
+        } catch {
+          // ignore
+        }
+      }
+    };
+  }, []);
 
   // 7-day chart scaling
   const maxPhrases = Math.max(

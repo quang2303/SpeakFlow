@@ -136,11 +136,14 @@ export default function TopHeaderBar() {
 
           {/* Daily Streak Pill */}
           <div
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-50 border border-amber-200/70 text-amber-700 text-xs font-semibold shadow-xs"
+            className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full bg-amber-50 border border-amber-200/70 text-amber-700 text-xs font-semibold shadow-xs shrink-0"
             title={`Chuỗi học: ${streak.currentStreak} ngày liên tiếp`}
           >
             <Flame className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
-            <span>{streak.currentStreak} ngày</span>
+            <span>
+              {streak.currentStreak}
+              <span className="hidden sm:inline"> ngày</span>
+            </span>
           </div>
 
           {/* Admin shortcut if admin */}

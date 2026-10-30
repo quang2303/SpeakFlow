@@ -95,6 +95,13 @@ export default function RoleplayPage() {
     return () => {
       window.removeEventListener("speakflow-auth-changed", handler);
       recognizerRef.current?.stop();
+      if (typeof window !== "undefined" && "speechSynthesis" in window) {
+        try {
+          window.speechSynthesis.cancel();
+        } catch {
+          // ignore
+        }
+      }
     };
   }, []);
 
