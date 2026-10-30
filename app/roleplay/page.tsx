@@ -42,7 +42,7 @@ interface RoleplayScenario {
 const ROLEPLAY_SCENARIOS: RoleplayScenario[] = [
   {
     id: "rp-1",
-    title: "Báo cáo tiến độ trong Daily Standup",
+    title: "Báo cáo tiến độ Standup",
     contextVi: "Quản lý hỏi tiến độ tính năng đăng nhập hôm nay của bạn.",
     partnerLineEn: "How is the new login feature coming along today?",
     partnerLineVi: "Tính năng đăng nhập mới hôm nay tiến triển thế nào rồi?",
@@ -64,7 +64,7 @@ const ROLEPLAY_SCENARIOS: RoleplayScenario[] = [
   },
   {
     id: "rp-3",
-    title: "Xử lý sự cố âm thanh khi họp Online",
+    title: "Họp Online & âm thanh bị giật",
     contextVi: "Đồng nghiệp nước ngoài nói hơi nhỏ và mạng bị giật.",
     partnerLineEn: "So for the Q3 roadmap, we should prioritize the mobile app...",
     partnerLineVi: "Vậy đối với lộ trình quý 3, chúng ta nên ưu tiên ứng dụng di động...",
@@ -98,24 +98,19 @@ export default function RoleplayPage() {
     };
   }, []);
 
-  if (currentUser?.status === "locked") {
-    return <AccountLockScreen user={currentUser} />;
-  }
-
-  const scenario = ROLEPLAY_SCENARIOS[activeIdx] || ROLEPLAY_SCENARIOS[0];
+  const scenario = ROLEPLAY_SCENARIOS[activeIdx];
 
   function handleSelectScenario(idx: number) {
     recognizerRef.current?.stop();
-    setMicState("idle");
     setActiveIdx(idx);
     setSpokenText("");
     setEvalResult(null);
+    setMicState("idle");
     setMicError(null);
   }
 
   function handleToggleMic() {
     if (micState === "listening") {
-      setMicState("processing");
       recognizerRef.current?.stop();
       return;
     }
@@ -126,13 +121,13 @@ export default function RoleplayPage() {
     setMicState("listening");
 
     const controller = startSpeechRecognition({
-      onStateChange: (next) => setMicState(next),
-      onInterimResult: (interim) => {
-        setSpokenText(interim);
-        setEvalResult(evaluatePronunciation(scenario.targetReplyEn, interim));
+      onStateChange: (state) => setMicState(state),
+      onInterimResult: (liveText) => {
+        setSpokenText(liveText);
       },
       onFinalResult: (finalTranscript) => {
         setSpokenText(finalTranscript);
+        setMicState("idle");
         const result = evaluatePronunciation(
           scenario.targetReplyEn,
           finalTranscript
@@ -164,21 +159,23 @@ export default function RoleplayPage() {
     recognizerRef.current = controller;
   }
 
+  if (currentUser?.status === "locked") {
+    return <AccountLockScreen user={currentUser} />;
+  }
+
   return (
-    <div className="px-4 md:px-8 pt-5 md:pt-8 pb-8 space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <div className="w-11 h-11 rounded-2xl bg-indigo-500/15 border border-indigo-500/30 flex items-center justify-center">
-            <MessageSquare className="w-6 h-6 text-indigo-400" />
-          </div>
-          <div>
-            <h1 className="text-lg md:text-2xl font-extrabold text-white">
-              Nhập vai Đối thoại Thực chiến (Roleplay)
-            </h1>
-            <p className="text-xs md:text-sm text-slate-400">
-              Lắng nghe đối phương và phản hồi bằng giọng nói tiếng Anh
-            </p>
-          </div>
+    <div className="px-4 sm:px-6 lg:px-8 py-6 space-y-6 max-w-5xl mx-auto">
+      <div className="flex items-center gap-3">
+        <div className="w-10 h-10 rounded-2xl bg-brand-50 text-brand-600 flex items-center justify-center shrink-0">
+          <MessageSquare className="w-5 h-5" />
+        </div>
+        <div>
+          <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
+            Nhập vai đối thoại
+          </h1>
+          <p className="text-xs text-slate-500">
+            Lắng nghe và luyện phản hồi bằng giọng nói tự nhiên
+          </p>
         </div>
       </div>
 
@@ -189,10 +186,10 @@ export default function RoleplayPage() {
             key={item.id}
             type="button"
             onClick={() => handleSelectScenario(idx)}
-            className={`px-3.5 py-2 rounded-xl text-xs md:text-sm font-bold border transition-all ${
+            className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold border transition-all ${
               activeIdx === idx
-                ? "bg-indigo-500/20 text-indigo-200 border-indigo-500/40 shadow-sm"
-                : "bg-slate-900/80 text-slate-400 border-slate-800 hover:text-slate-200"
+                ? "bg-brand-50 text-brand-600 border-brand-200 shadow-xs"
+                : "bg-white text-slate-600 border-slate-200 hover:text-slate-900"
             }`}
           >
             Tình huống {idx + 1}: {item.title}
@@ -200,59 +197,57 @@ export default function RoleplayPage() {
         ))}
       </div>
 
-      <div className="rounded-3xl bg-gradient-to-b from-slate-900 to-slate-950 border border-slate-800 p-5 md:p-7 space-y-6 shadow-2xl">
-        <div className="flex items-center justify-between gap-2 border-b border-slate-800 pb-4">
-          <div>
-            <span className="text-[11px] font-bold uppercase tracking-wider text-indigo-400">
-              Bối cảnh giao tiếp
-            </span>
-            <p className="text-sm md:text-base font-bold text-white mt-0.5">
-              {scenario.contextVi}
-            </p>
-          </div>
+      <div className="rounded-3xl bg-white border border-slate-200/90 p-6 md:p-8 space-y-6 shadow-sm">
+        <div className="border-b border-slate-100 pb-4">
+          <span className="text-xs font-bold uppercase tracking-wider text-brand-600">
+            Bối cảnh giao tiếp
+          </span>
+          <p className="text-sm md:text-base font-semibold text-slate-900 mt-0.5">
+            {scenario.contextVi}
+          </p>
         </div>
 
         {/* Partner bubble */}
-        <div className="bg-slate-950/90 border border-slate-800 rounded-2xl p-4 space-y-2">
+        <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-2">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-sky-400">
-              👤 Người đối thoại nói:
+            <span className="text-xs font-bold text-brand-600">
+              👤 Đối phương hỏi:
             </span>
             <button
               type="button"
               onClick={() => speakEnglish(scenario.partnerLineEn, 1.0)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-sky-500/15 hover:bg-sky-500/25 text-sky-300 border border-sky-500/30 text-xs font-bold"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 text-xs font-semibold transition-colors shadow-xs"
             >
-              <Volume2 className="w-3.5 h-3.5" />
+              <Volume2 className="w-3.5 h-3.5 text-brand-600" />
               Nghe câu hỏi
             </button>
           </div>
-          <p className="text-base md:text-lg font-bold text-white">
+          <p className="text-base md:text-lg font-bold text-slate-900">
             &ldquo;{scenario.partnerLineEn}&rdquo;
           </p>
-          <p className="text-xs text-slate-400">{scenario.partnerLineVi}</p>
+          <p className="text-xs text-slate-500">{scenario.partnerLineVi}</p>
         </div>
 
         {/* User reply prompt */}
-        <div className="bg-indigo-950/20 border border-indigo-500/30 rounded-2xl p-4 space-y-3">
+        <div className="bg-brand-50/60 border border-brand-100 rounded-2xl p-5 space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-emerald-400 flex items-center gap-1.5">
+            <span className="text-xs font-bold text-emerald-700 flex items-center gap-1.5">
               <Sparkles className="w-3.5 h-3.5" />
               Câu trả lời mẫu của bạn:
             </span>
             <button
               type="button"
               onClick={() => speakEnglish(scenario.targetReplyEn, 1.0)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-xs font-semibold transition-colors shadow-xs"
             >
-              <Volume2 className="w-3.5 h-3.5 text-sky-400" />
-              Nghe mẫu (1x)
+              <Volume2 className="w-3.5 h-3.5 text-brand-600" />
+              Nghe mẫu
             </button>
           </div>
-          <p className="text-base md:text-lg font-extrabold text-white">
+          <p className="text-base md:text-lg font-bold text-slate-900">
             &ldquo;{scenario.targetReplyEn}&rdquo;
           </p>
-          <p className="text-xs text-slate-300">{scenario.targetReplyVi}</p>
+          <p className="text-xs text-slate-600">{scenario.targetReplyVi}</p>
         </div>
 
         {/* Mic Practice */}
@@ -260,23 +255,23 @@ export default function RoleplayPage() {
           <button
             type="button"
             onClick={handleToggleMic}
-            className={`px-6 py-3.5 rounded-2xl font-extrabold text-sm flex items-center gap-2.5 transition-all shadow-lg ${
+            className={`px-7 py-3.5 rounded-2xl font-semibold text-sm flex items-center gap-2.5 transition-all shadow-sm ${
               micState === "listening"
-                ? "bg-rose-600 text-white animate-pulse"
+                ? "bg-rose-600 text-white ring-2 ring-rose-300"
                 : micState === "processing"
-                ? "bg-indigo-600 text-white"
-                : "bg-gradient-to-r from-indigo-500 to-sky-500 text-slate-950 hover:opacity-95"
+                ? "bg-brand-600 text-white"
+                : "bg-brand-600 hover:bg-brand-700 text-white"
             }`}
           >
             {micState === "listening" ? (
               <>
-                <Mic className="w-5 h-5" />
-                <span>Đang thu âm... (Nhấn để dừng)</span>
+                <Mic className="w-5 h-5 animate-pulse" />
+                <span>Đang thu âm... (Bấm để dừng)</span>
               </>
             ) : micState === "processing" ? (
               <>
                 <Loader2 className="w-5 h-5 animate-spin" />
-                <span>Đang chấm phát âm...</span>
+                <span>Đang chấm điểm...</span>
               </>
             ) : (
               <>
@@ -287,23 +282,23 @@ export default function RoleplayPage() {
           </button>
 
           {micError && (
-            <div className="w-full flex items-center gap-2 text-xs text-amber-200 bg-amber-500/10 border border-amber-500/30 rounded-xl p-3">
-              <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+            <div className="w-full flex items-center gap-2 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-xl p-3">
+              <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
               <span>{micError}</span>
             </div>
           )}
 
           {evalResult && (
-            <div className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-4 space-y-3">
+            <div className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-3">
               <div className="flex items-center justify-between">
-                <span className="text-xs text-slate-400">
-                  Bạn nói: <em className="text-slate-200">{spokenText}</em>
+                <span className="text-xs text-slate-500">
+                  Bạn nói: <em className="text-slate-800">{spokenText}</em>
                 </span>
                 <span
-                  className={`text-xs font-extrabold px-2.5 py-1 rounded-lg border ${
+                  className={`text-xs font-bold px-2.5 py-1 rounded-lg border ${
                     evalResult.score >= 80
-                      ? "bg-emerald-500/10 text-emerald-300 border-emerald-500/30"
-                      : "bg-amber-500/10 text-amber-300 border-amber-500/30"
+                      ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                      : "bg-amber-50 text-amber-800 border-amber-200"
                   }`}
                 >
                   Điểm phát âm: {evalResult.score}%
@@ -320,16 +315,16 @@ export default function RoleplayPage() {
                       onClick={() =>
                         speakText(wb.cleanWord || wb.originalWord, 0.7)
                       }
-                      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-bold border ${
+                      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-semibold border ${
                         ok
-                          ? "text-emerald-400 bg-emerald-950/60 border-emerald-500/40"
-                          : "text-rose-400 bg-rose-950/60 border-rose-500/40 underline decoration-rose-500 decoration-wavy"
+                          ? "text-emerald-700 bg-white border-emerald-300"
+                          : "text-rose-700 bg-white border-rose-300 underline decoration-rose-500 decoration-wavy"
                       }`}
                     >
                       {ok ? (
-                        <Check className="w-3 h-3" />
+                        <Check className="w-3 h-3 text-emerald-600" />
                       ) : (
-                        <RotateCcw className="w-3 h-3" />
+                        <RotateCcw className="w-3 h-3 text-rose-500" />
                       )}
                       <span>{wb.originalWord}</span>
                     </button>

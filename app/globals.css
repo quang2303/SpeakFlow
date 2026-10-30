@@ -4,11 +4,55 @@
 
 @layer base {
   :root {
-    color-scheme: dark;
+    color-scheme: light;
+    /* Default Theme: Bright Emerald Mint (#10B981) - Fresh, luminous & energetic */
+    --brand-50: #ecfdf5;
+    --brand-100: #d1fae5;
+    --brand-200: #a7f3d0;
+    --brand-300: #6ee7b7;
+    --brand-400: #34d399;
+    --brand-500: #10b981;
+    --brand-600: #059669;
+    --brand-700: #047857;
+  }
+
+  [data-theme="emerald"] {
+    --brand-50: #ecfdf5;
+    --brand-100: #d1fae5;
+    --brand-200: #a7f3d0;
+    --brand-300: #6ee7b7;
+    --brand-400: #34d399;
+    --brand-500: #10b981;
+    --brand-600: #059669;
+    --brand-700: #047857;
+  }
+
+  [data-theme="sky"] {
+    /* Bright Electric Sky Blue (#0EA5E9) */
+    --brand-50: #f0f9ff;
+    --brand-100: #e0f2fe;
+    --brand-200: #bae6fd;
+    --brand-300: #7dd3fc;
+    --brand-400: #38bdf8;
+    --brand-500: #0ea5e9;
+    --brand-600: #0284c7;
+    --brand-700: #0369a1;
+  }
+
+  [data-theme="coral"] {
+    /* Warm Sunny Coral / Amber (#F97316) */
+    --brand-50: #fff7ed;
+    --brand-100: #ffedd5;
+    --brand-200: #fed7aa;
+    --brand-300: #fdba74;
+    --brand-400: #fb923c;
+    --brand-500: #f97316;
+    --brand-600: #ea580c;
+    --brand-700: #c2410c;
   }
 
   body {
-    @apply bg-slate-950 text-slate-100 antialiased selection:bg-indigo-500/30 selection:text-indigo-200;
+    @apply bg-white text-slate-800 antialiased selection:bg-brand-100 selection:text-brand-700;
     -webkit-tap-highlight-color: transparent;
   }
 }
@@ -32,17 +76,21 @@
   }
 }
 
-/* Custom subtle scrollbars for mobile container */
+/* Custom subtle scrollbars for light theme */
 ::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: rgba(15, 23, 42, 0.5);
+  background: #f8fafc;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(71, 85, 105, 0.5);
+  background: #cbd5e1;
   border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }

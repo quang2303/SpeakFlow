@@ -27,34 +27,34 @@ const nowIso = new Date().toISOString();
 export const SEED_DECKS: Deck[] = [
   {
     id: "11111111-1111-4111-8111-111111111111",
-    title: "Phản xạ Giao tiếp Hàng ngày",
+    title: "Giao tiếp hằng ngày",
     description:
-      "Các cụm từ tự nhiên dùng mỗi ngày giúp bạn bật ra ý ngay lập tức, bày tỏ quan điểm, đồng tình và nhờ giúp đỡ.",
+      "Mẫu câu tự nhiên dùng mỗi ngày giúp bật ra ý ngay lập tức.",
     icon: "Zap",
     created_at: nowIso,
   },
   {
     id: "22222222-2222-4222-8222-222222222222",
-    title: "Tiếng Anh Công sở & Họp hành",
+    title: "Tiếng Anh công sở",
     description:
-      "Cụm từ chuyên nghiệp để báo cáo tiến độ, làm rõ vấn đề, thương lượng deadline và nhờ vả khéo léo.",
+      "Giao tiếp chuyên nghiệp trong môi trường làm việc văn phòng.",
     icon: "Briefcase",
     created_at: nowIso,
   },
   {
     id: "33333333-3333-4333-8333-333333333333",
-    title: "Du lịch, Ăn uống & Sân bay",
+    title: "Họp hành và báo cáo",
     description:
-      "Tình huống thực tế khi làm thủ tục bay, nhận phòng khách sạn, gọi món nhà hàng, hỏi đường và xử lý sự cố.",
-    icon: "Plane",
+      "Báo cáo tiến độ, thảo luận công việc và làm rõ vấn đề.",
+    icon: "Users",
     created_at: nowIso,
   },
   {
     id: "44444444-4444-4444-8444-444444444444",
-    title: "Small Talk & Kết bạn",
+    title: "Du lịch và cuộc sống",
     description:
-      "Phá băng tự nhiên, trò chuyện về sở thích, duy trì mạch hội thoại thú vị và kết nối bạn bè quốc tế.",
-    icon: "Users",
+      "Tình huống thực tế khi du lịch, ăn uống, hỏi đường và kết bạn.",
+    icon: "Plane",
     created_at: nowIso,
   },
 ];

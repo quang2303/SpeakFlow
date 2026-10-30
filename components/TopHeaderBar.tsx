@@ -6,34 +6,72 @@ import { useRouter } from "next/navigation";
 import {
   Shield,
   LogOut,
-  ArrowLeftRight,
   LogIn,
-  Lock,
-  GraduationCap,
   Zap,
+  Flame,
+  Palette,
 } from "lucide-react";
 import {
   getCurrentUser,
   getStoredUserProfile,
+  getStreakData,
   signOutUser,
+  StreakData,
   UserProfile,
 } from "@/lib/dataService";
 import { UserAvatar } from "./AuthModal";
 
+const THEME_OPTIONS = [
+  { id: "emerald", label: "Xanh Mint tươi sáng", dotColor: "bg-emerald-500", ringColor: "ring-emerald-400" },
+  { id: "sky", label: "Xanh Da Trời tươi", dotColor: "bg-sky-500", ringColor: "ring-sky-400" },
+  { id: "coral", label: "Cam Nắng ấm áp", dotColor: "bg-orange-500", ringColor: "ring-orange-400" },
+];
+
 export default function TopHeaderBar() {
   const router = useRouter();
   const [user, setUser] = useState<UserProfile | null>(null);
+  const [currentTheme, setCurrentTheme] = useState<string>("emerald");
+  const [streak, setStreak] = useState<StreakData>({
+    currentStreak: 1,
+    lastStudyDate: null,
+    todayReviewedCount: 0,
+  });
 
-  const syncUser = useCallback(() => {
+  const syncState = useCallback(() => {
     setUser(getStoredUserProfile());
+    setStreak(getStreakData());
   }, []);
 
   useEffect(() => {
-    syncUser();
+    syncState();
     void getCurrentUser().then((u) => setUser(u));
-    window.addEventListener("speakflow-auth-changed", syncUser);
-    return () => window.removeEventListener("speakflow-auth-changed", syncUser);
-  }, [syncUser]);
+
+    // Load saved theme
+    try {
+      const saved = localStorage.getItem("speakflow_color_theme");
+      if (saved && ["emerald", "sky", "coral"].includes(saved)) {
+        setCurrentTheme(saved);
+        document.documentElement.setAttribute("data-theme", saved);
+      } else {
+        document.documentElement.setAttribute("data-theme", "emerald");
+      }
+    } catch {
+      // fallback
+    }
+
+    window.addEventListener("speakflow-auth-changed", syncState);
+    return () => window.removeEventListener("speakflow-auth-changed", syncState);
+  }, [syncState]);
+
+  function handleSelectTheme(themeId: string) {
+    setCurrentTheme(themeId);
+    try {
+      localStorage.setItem("speakflow_color_theme", themeId);
+      document.documentElement.setAttribute("data-theme", themeId);
+    } catch {
+      // ignore
+    }
+  }
 
   async function handleLogout() {
     await signOutUser();
@@ -41,110 +79,117 @@ export default function TopHeaderBar() {
     router.push("/login");
   }
 
+  const displayName = user?.full_name || "Quang Đức";
+
   return (
-    <header className="sticky top-0 z-30 bg-slate-950/90 backdrop-blur-xl border-b border-slate-800/80 px-4 md:px-8 py-2.5">
-      <div className="max-w-7xl mx-auto flex items-center justify-between gap-2.5">
-        {/* Left: Mobile Brand or Desktop Active Account Role Status */}
-        <div className="flex items-center gap-2.5 min-w-0">
+    <header className="sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-slate-200/80 px-4 md:px-8 py-3">
+      <div className="max-w-5xl mx-auto flex items-center justify-between gap-3">
+        {/* Left: Mobile Brand & Desktop Welcome / Breadcrumb */}
+        <div className="flex items-center gap-3 min-w-0">
           <Link
             href="/"
-            className="flex md:hidden items-center gap-2 shrink-0"
+            className="flex md:hidden items-center gap-2 shrink-0 group"
           >
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-sky-500 via-indigo-500 to-emerald-500 p-[1.5px]">
-              <div className="w-full h-full bg-slate-950 rounded-[10px] flex items-center justify-center">
-                <Zap className="w-4 h-4 text-sky-400 fill-sky-400/20" />
-              </div>
+            <div className="w-8 h-8 rounded-xl bg-brand-500 flex items-center justify-center text-white shadow-xs">
+              <Zap className="w-4 h-4 fill-white" />
             </div>
-            <span className="text-sm font-extrabold text-white">SpeakFlow</span>
+            <span className="text-base font-bold text-slate-900 tracking-tight">
+              SpeakFlow
+            </span>
           </Link>
 
-          {user ? (
-            <div className="flex items-center gap-2.5 min-w-0">
-              <UserAvatar
-                user={user}
-                sizeClass="w-8 h-8 rounded-xl text-xs"
-                showOnlineDot={user.status !== "locked"}
-              />
-              <div className="min-w-0">
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <span className="text-xs md:text-sm font-extrabold text-white truncate max-w-[130px] sm:max-w-[220px]">
-                    {user.full_name}
-                  </span>
-
-                  {/* Role Badge */}
-                  {user.role === "admin" ? (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-indigo-500/20 text-indigo-300 border border-indigo-500/40">
-                      <Shield className="w-3 h-3 text-indigo-400" />
-                      <span>Admin</span>
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
-                      <GraduationCap className="w-3 h-3 text-emerald-400" />
-                      <span>Học viên</span>
-                    </span>
-                  )}
-
-                  {/* Locked Badge if locked */}
-                  {user.status === "locked" && (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-rose-500/20 text-rose-300 border border-rose-500/40">
-                      <Lock className="w-3 h-3 text-rose-400" />
-                      <span>Đang khóa</span>
-                    </span>
-                  )}
-                </div>
-                <p className="hidden sm:block text-[11px] text-slate-400 truncate">
-                  {user.email}
-                </p>
-              </div>
-            </div>
-          ) : (
-            <div className="hidden md:flex items-center gap-2 text-xs text-slate-400">
-              <span className="w-2 h-2 rounded-full bg-amber-400" />
-              <span>Chưa đăng nhập • Chế độ khách</span>
-            </div>
-          )}
+          <div className="hidden md:flex items-center gap-2 text-xs text-slate-500 font-medium">
+            <span>Tiếng Anh phản xạ</span>
+            <span>•</span>
+            <span className="text-slate-700">Học thông minh mỗi ngày</span>
+          </div>
         </div>
 
-        {/* Right: Admin Button + Switch Account / Logout Buttons */}
-        <div className="flex items-center gap-2 shrink-0">
+        {/* Right: Theme Color Switcher + Streak + Account Actions */}
+        <div className="flex items-center gap-2.5 shrink-0">
+          {/* Quick Theme Color Picker */}
+          <div
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-50 border border-slate-200/90 shadow-xs"
+            title="Đổi màu sắc giao diện sáng hơn"
+          >
+            <Palette className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+            <div className="flex items-center gap-1">
+              {THEME_OPTIONS.map((t) => {
+                const isActive = currentTheme === t.id;
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => handleSelectTheme(t.id)}
+                    title={t.label}
+                    className={`w-4 h-4 rounded-full ${t.dotColor} transition-transform ${
+                      isActive
+                        ? `scale-110 ring-2 ${t.ringColor} ring-offset-1`
+                        : "opacity-60 hover:opacity-100 hover:scale-105"
+                    }`}
+                    aria-label={`Chọn màu ${t.label}`}
+                  />
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Daily Streak Pill */}
+          <div
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-50 border border-amber-200/70 text-amber-700 text-xs font-semibold shadow-xs"
+            title={`Chuỗi học: ${streak.currentStreak} ngày liên tiếp`}
+          >
+            <Flame className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
+            <span>{streak.currentStreak} ngày</span>
+          </div>
+
+          {/* Admin shortcut if admin */}
           {user?.role === "admin" && (
             <Link
               href="/admin"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-400 hover:to-purple-500 text-white font-extrabold text-xs shadow-md shadow-indigo-950/50 transition-all active:scale-95"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold text-xs border border-indigo-200/60 transition-colors"
             >
-              <Shield className="w-3.5 h-3.5" />
-              <span>🛡️ Quản trị (Admin)</span>
+              <Shield className="w-3.5 h-3.5 text-indigo-600" />
+              <span className="hidden sm:inline">Quản trị</span>
             </Link>
           )}
 
-          <Link
-            href="/login"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-sky-500/15 hover:bg-sky-500/25 text-sky-300 border border-sky-500/30 font-bold text-xs transition-all"
-            title="Đăng nhập tài khoản"
-          >
-            {user ? (
-              <>
-                <ArrowLeftRight className="w-3.5 h-3.5" />
-                <span>Đổi tài khoản</span>
-              </>
-            ) : (
-              <>
-                <LogIn className="w-3.5 h-3.5" />
-                <span>Đăng nhập</span>
-              </>
-            )}
-          </Link>
+          {/* User Account / Login Button */}
+          {user ? (
+            <div className="flex items-center gap-2">
+              <Link
+                href="/login"
+                className="flex items-center gap-2 px-2.5 py-1 rounded-xl hover:bg-slate-50 transition-colors text-left"
+                title="Đổi tài khoản"
+              >
+                <UserAvatar
+                  user={user}
+                  sizeClass="w-7 h-7 rounded-lg text-xs"
+                  showOnlineDot={user.status !== "locked"}
+                />
+                <span className="hidden sm:inline text-xs font-semibold text-slate-800 max-w-[120px] truncate">
+                  {displayName}
+                </span>
+              </Link>
 
-          {user && (
-            <button
-              type="button"
-              onClick={handleLogout}
-              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30 font-bold text-xs transition-all"
-              title="Đăng xuất tài khoản hiện tại"
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                title="Đăng xuất"
+                aria-label="Đăng xuất"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            </div>
+          ) : (
+            <Link
+              href="/login"
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-white font-medium text-xs shadow-xs transition-colors"
             >
-              <LogOut className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Đăng xuất</span>
-            </button>
+              <LogIn className="w-3.5 h-3.5" />
+              <span>Đăng nhập</span>
+            </Link>
           )}
         </div>
       </div>

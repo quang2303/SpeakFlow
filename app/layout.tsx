@@ -10,13 +10,13 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "SpeakFlow - Phản xạ Giao tiếp Tiếng Anh (PC & Mobile)",
+  title: "SpeakFlow - Giao tiếp Tiếng Anh phản xạ",
   description:
-    "Ứng dụng luyện phản xạ giao tiếp tiếng Anh với phương pháp Chunking, Active Recall, Spaced Repetition (SM-2) & Luyện nói Shadowing.",
+    "Ứng dụng luyện phản xạ giao tiếp tiếng Anh đơn giản, thân thiện với phương pháp Chunking, Active Recall, Spaced Repetition (SM-2) & Shadowing.",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
-    statusBarStyle: "black-translucent",
+    statusBarStyle: "default",
     title: "SpeakFlow",
   },
   icons: {
@@ -30,7 +30,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
-  themeColor: "#020617",
+  themeColor: "#10B981",
 };
 
 export default function RootLayout({
@@ -39,9 +39,23 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="vi" className="dark">
+    <html lang="vi" data-theme="emerald">
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              try {
+                var savedTheme = localStorage.getItem('speakflow_color_theme');
+                if (savedTheme) {
+                  document.documentElement.setAttribute('data-theme', savedTheme);
+                }
+              } catch (e) {}
+            `,
+          }}
+        />
+      </head>
       <body
-        className={`${inter.variable} font-sans bg-slate-950 text-slate-100 min-h-screen`}
+        className={`${inter.variable} font-sans bg-white text-slate-800 min-h-screen`}
       >
         <AppLayoutShell>{children}</AppLayoutShell>
       </body>

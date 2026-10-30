@@ -153,7 +153,7 @@ export default function ManageCardsPage() {
   async function handleToggleStorageMode() {
     if (!supabaseConfigured) {
       showToast(
-        "Chưa cấu hình biến môi trường NEXT_PUBLIC_SUPABASE_URL. Ứng dụng đang chạy mượt trên LocalStorage!"
+        "Chưa cấu hình Supabase Cloud. Dữ liệu đang được lưu trữ trên LocalStorage."
       );
       return;
     }
@@ -162,8 +162,8 @@ export default function ManageCardsPage() {
     await refreshData();
     showToast(
       nextForceLocal
-        ? "Đã chuyển sang chế độ lưu trữ LocalStorage trên trình duyệt."
-        : "Đã kết nối đồng bộ với Supabase Cloud PostgreSQL!"
+        ? "Đã chuyển sang chế độ lưu trữ LocalStorage."
+        : "Đã kết nối đồng bộ với Supabase Cloud!"
     );
   }
 
@@ -193,7 +193,7 @@ export default function ManageCardsPage() {
     setSentenceVi("");
     setContextNote("");
     await refreshData();
-    showToast("Đã thêm mẫu câu phản xạ mới thành công!");
+    showToast("Đã thêm mẫu câu mới thành công!");
   }
 
   async function handleBatchImport() {
@@ -224,7 +224,7 @@ export default function ManageCardsPage() {
       setActiveTab("list");
     } catch {
       showToast(
-        "Định dạng JSON/CSV chưa hợp lệ. Hãy bấm 'Mẫu JSON' để xem cấu trúc chuẩn."
+        "Định dạng JSON/CSV chưa hợp lệ. Hãy bấm 'Mẫu JSON' để xem cấu trúc."
       );
     }
   }
@@ -238,7 +238,7 @@ export default function ManageCardsPage() {
   async function handleResetSeed() {
     resetLocalToSeed();
     await refreshData();
-    showToast("Đã khôi phục 30 mẫu câu gốc ban đầu!");
+    showToast("Đã khôi phục danh sách mẫu câu gốc!");
   }
 
   const filteredCards = useMemo(() => {
@@ -258,36 +258,34 @@ export default function ManageCardsPage() {
   }
 
   return (
-    <div className="px-4 md:px-8 pt-5 md:pt-8 pb-8 space-y-6">
+    <div className="px-4 sm:px-6 lg:px-8 py-6 space-y-6 max-w-5xl mx-auto">
       {/* Header & Storage Mode Status Toggle */}
-      <div className="bg-slate-900/95 border border-slate-800 rounded-3xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm">
+      <div className="bg-white border border-slate-200/90 rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xs">
         <div className="flex items-center gap-3">
           {storageMode === "supabase" ? (
-            <div className="w-11 h-11 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center shrink-0">
-              <Database className="w-5 h-5 text-emerald-400" />
+            <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+              <Database className="w-5 h-5" />
             </div>
           ) : (
-            <div className="w-11 h-11 rounded-2xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center shrink-0">
-              <HardDrive className="w-5 h-5 text-amber-400" />
+            <div className="w-10 h-10 rounded-2xl bg-amber-50 text-amber-500 flex items-center justify-center shrink-0">
+              <HardDrive className="w-5 h-5" />
             </div>
           )}
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-base md:text-lg font-extrabold text-white">
-                {storageMode === "supabase"
-                  ? "Kho Thẻ Phản Xạ — Đồng bộ Supabase Cloud"
-                  : "Kho Thẻ Phản Xạ — Chế độ LocalStorage"}
+              <h1 className="text-base sm:text-lg font-bold text-slate-900">
+                Kho thẻ phản xạ
               </h1>
               <span
-                className={`w-2.5 h-2.5 rounded-full ${
+                className={`w-2 h-2 rounded-full ${
                   storageMode === "supabase"
-                    ? "bg-emerald-400 shadow-[0_0_8px_#34d399]"
-                    : "bg-amber-400 shadow-[0_0_8px_#fbbf24]"
+                    ? "bg-emerald-500"
+                    : "bg-amber-400"
                 }`}
               />
             </div>
-            <p className="text-xs text-slate-400 mt-0.5">
-              Tổng cộng {cards.length} mẫu câu trong {decks.length} bộ chủ đề
+            <p className="text-xs text-slate-500">
+              {cards.length} mẫu câu trong {decks.length} chủ đề • {storageMode === "supabase" ? "Supabase Cloud" : "LocalStorage"}
             </p>
           </div>
         </div>
@@ -295,76 +293,76 @@ export default function ManageCardsPage() {
         <button
           type="button"
           onClick={handleToggleStorageMode}
-          className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 border border-slate-700 shrink-0 self-start sm:self-auto"
+          className="px-3.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-semibold text-slate-700 transition-colors shrink-0 self-start sm:self-auto"
         >
           {storageMode === "supabase"
             ? "Chuyển sang Local"
-            : "Kết nối Supabase Cloud"}
+            : "Kết nối Cloud"}
         </button>
       </div>
 
       {/* Toast Feedback */}
       {statusMessage && (
-        <div className="bg-emerald-500/15 border border-emerald-500/30 text-emerald-200 rounded-2xl p-3.5 text-xs md:text-sm font-medium flex items-center gap-2">
-          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+        <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl p-3.5 text-xs sm:text-sm font-medium flex items-center gap-2">
+          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
           <span>{statusMessage}</span>
         </div>
       )}
 
-      {/* Mobile Sub-navigation Tabs (Hidden on lg because lg shows 2-column side-by-side) */}
-      <div className="grid grid-cols-3 lg:hidden gap-1.5 bg-slate-900 p-1 rounded-2xl border border-slate-800">
+      {/* Mobile Sub-navigation Tabs */}
+      <div className="grid grid-cols-3 lg:hidden gap-1 bg-slate-100 p-1 rounded-xl">
         <button
           type="button"
           onClick={() => setActiveTab("single")}
-          className={`py-2 px-2 rounded-xl text-xs font-bold transition-all ${
+          className={`py-2 px-2 rounded-lg text-xs font-semibold transition-colors ${
             activeTab === "single"
-              ? "bg-sky-500 text-slate-950 shadow"
-              : "text-slate-400 hover:text-white"
+              ? "bg-white text-slate-900 shadow-xs"
+              : "text-slate-500 hover:text-slate-800"
           }`}
         >
-          + Thêm câu mới
+          + Thêm câu
         </button>
         <button
           type="button"
           onClick={() => setActiveTab("batch")}
-          className={`py-2 px-2 rounded-xl text-xs font-bold transition-all ${
+          className={`py-2 px-2 rounded-lg text-xs font-semibold transition-colors ${
             activeTab === "batch"
-              ? "bg-sky-500 text-slate-950 shadow"
-              : "text-slate-400 hover:text-white"
+              ? "bg-white text-slate-900 shadow-xs"
+              : "text-slate-500 hover:text-slate-800"
           }`}
         >
-          Nhập JSON/CSV
+          Nhập file
         </button>
         <button
           type="button"
           onClick={() => setActiveTab("list")}
-          className={`py-2 px-2 rounded-xl text-xs font-bold transition-all ${
+          className={`py-2 px-2 rounded-lg text-xs font-semibold transition-colors ${
             activeTab === "list"
-              ? "bg-sky-500 text-slate-950 shadow"
-              : "text-slate-400 hover:text-white"
+              ? "bg-white text-slate-900 shadow-xs"
+              : "text-slate-500 hover:text-slate-800"
           }`}
         >
           Kho câu ({cards.length})
         </button>
       </div>
 
-      {/* Desktop 12-Col Split View / Mobile Tabbed View */}
+      {/* 2-Column Split View on Desktop */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* LEFT COLUMN ON PC (5 Cols): Create Single Phrase or Batch Import */}
+        {/* LEFT COLUMN: Create Single Phrase or Batch Import */}
         <div
           className={`lg:col-span-5 space-y-4 ${
             activeTab === "list" ? "hidden lg:block" : "block"
           }`}
         >
           {/* Desktop Form Mode Switcher */}
-          <div className="hidden lg:grid grid-cols-2 gap-1.5 bg-slate-900 p-1 rounded-2xl border border-slate-800">
+          <div className="hidden lg:grid grid-cols-2 gap-1 bg-slate-100 p-1 rounded-xl">
             <button
               type="button"
               onClick={() => setActiveTab("single")}
-              className={`py-2 px-3 rounded-xl text-xs font-bold transition-all ${
+              className={`py-2 px-3 rounded-lg text-xs font-semibold transition-colors ${
                 activeTab !== "batch"
-                  ? "bg-sky-500 text-slate-950 shadow"
-                  : "text-slate-400 hover:text-white"
+                  ? "bg-white text-slate-900 shadow-xs"
+                  : "text-slate-500 hover:text-slate-800"
               }`}
             >
               + Tạo câu đơn lẻ
@@ -372,34 +370,34 @@ export default function ManageCardsPage() {
             <button
               type="button"
               onClick={() => setActiveTab("batch")}
-              className={`py-2 px-3 rounded-xl text-xs font-bold transition-all ${
+              className={`py-2 px-3 rounded-lg text-xs font-semibold transition-colors ${
                 activeTab === "batch"
-                  ? "bg-sky-500 text-slate-950 shadow"
-                  : "text-slate-400 hover:text-white"
+                  ? "bg-white text-slate-900 shadow-xs"
+                  : "text-slate-500 hover:text-slate-800"
               }`}
             >
-              Nhập hàng loạt JSON/CSV
+              Nhập JSON/CSV
             </button>
           </div>
 
           {activeTab !== "batch" ? (
             <form
               onSubmit={handleCreateSingleCard}
-              className="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 space-y-3.5 shadow-lg"
+              className="bg-white border border-slate-200/90 rounded-2xl p-5 space-y-3.5 shadow-xs"
             >
-              <h2 className="text-sm md:text-base font-bold text-white flex items-center gap-2">
-                <PlusCircle className="w-4 h-4 text-sky-400" />
-                <span>Tạo thẻ Phản xạ Giao tiếp mới</span>
+              <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                <PlusCircle className="w-4 h-4 text-brand-600" />
+                <span>Tạo thẻ mẫu câu mới</span>
               </h2>
 
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-300">
-                  Bộ chủ đề (Deck)
+                <label className="text-xs font-semibold text-slate-700">
+                  Bộ chủ đề
                 </label>
                 <select
                   value={deckId}
                   onChange={(e) => setDeckId(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-sky-500"
+                  className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-brand-500"
                 >
                   {decks.map((d) => (
                     <option key={d.id} value={d.id}>
@@ -411,8 +409,8 @@ export default function ManageCardsPage() {
 
               <div className="grid grid-cols-2 gap-2.5">
                 <div className="space-y-1">
-                  <label className="text-xs font-semibold text-slate-300">
-                    Cụm từ khóa (Chunk) *
+                  <label className="text-xs font-semibold text-slate-700">
+                    Cụm từ khóa *
                   </label>
                   <input
                     type="text"
@@ -420,11 +418,11 @@ export default function ManageCardsPage() {
                     placeholder="VD: make up my mind"
                     value={phraseEn}
                     onChange={(e) => setPhraseEn(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-sky-500"
+                    className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-brand-500"
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-xs font-semibold text-slate-300">
+                  <label className="text-xs font-semibold text-slate-700">
                     Phiên âm IPA
                   </label>
                   <input
@@ -432,13 +430,13 @@ export default function ManageCardsPage() {
                     placeholder="VD: /meɪk ʌp maɪ maɪnd/"
                     value={ipa}
                     onChange={(e) => setIpa(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-sky-500"
+                    className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-brand-500"
                   />
                 </div>
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-300">
+                <label className="text-xs font-semibold text-slate-700">
                   Nghĩa tiếng Việt của cụm từ *
                 </label>
                 <input
@@ -447,13 +445,13 @@ export default function ManageCardsPage() {
                   placeholder="VD: đưa ra quyết định"
                   value={meaningVi}
                   onChange={(e) => setMeaningVi(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-sky-500"
+                  className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-brand-500"
                 />
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-300">
-                  Câu gợi ý Tiếng Việt (Hiện ở mặt trước thẻ) *
+                <label className="text-xs font-semibold text-slate-700">
+                  Câu tình huống Tiếng Việt *
                 </label>
                 <input
                   type="text"
@@ -461,13 +459,13 @@ export default function ManageCardsPage() {
                   placeholder="VD: Tôi vẫn chưa đưa ra quyết định nữa."
                   value={sentenceVi}
                   onChange={(e) => setSentenceVi(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-sky-500"
+                  className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-brand-500"
                 />
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-300">
-                  Câu giao tiếp Tiếng Anh hoàn chỉnh (Mặt sau) *
+                <label className="text-xs font-semibold text-slate-700">
+                  Câu giao tiếp Tiếng Anh hoàn chỉnh *
                 </label>
                 <input
                   type="text"
@@ -475,37 +473,37 @@ export default function ManageCardsPage() {
                   placeholder="VD: I haven't made up my mind yet."
                   value={sentenceEn}
                   onChange={(e) => setSentenceEn(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-sky-500"
+                  className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-brand-500"
                 />
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-300">
-                  Ghi chú ngữ cảnh sử dụng
+                <label className="text-xs font-semibold text-slate-700">
+                  Ghi chú ngữ cảnh
                 </label>
                 <input
                   type="text"
-                  placeholder="VD: Dùng khi đang phân vân giữa các lựa chọn..."
+                  placeholder="VD: Dùng khi đang phân vân..."
                   value={contextNote}
                   onChange={(e) => setContextNote(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-sky-500"
+                  className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-brand-500"
                 />
               </div>
 
               <button
                 type="submit"
-                className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white font-bold text-xs md:text-sm flex items-center justify-center gap-2 shadow-lg"
+                className="w-full py-3 px-4 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-semibold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-xs transition-colors"
               >
                 <PlusCircle className="w-4 h-4" />
-                <span>Lưu vào Kho Thẻ Phản Xạ</span>
+                <span>Lưu vào Kho Thẻ</span>
               </button>
             </form>
           ) : (
-            <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 space-y-3.5 shadow-lg">
+            <div className="bg-white border border-slate-200/90 rounded-2xl p-5 space-y-3.5 shadow-xs">
               <div className="flex items-center justify-between">
-                <h2 className="text-sm font-bold text-white flex items-center gap-2">
-                  <FileJson className="w-4 h-4 text-sky-400" />
-                  <span>Nhập hàng loạt (JSON / CSV)</span>
+                <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                  <FileJson className="w-4 h-4 text-brand-600" />
+                  <span>Nhập hàng loạt</span>
                 </h2>
 
                 <div className="flex items-center gap-1.5">
@@ -515,10 +513,10 @@ export default function ManageCardsPage() {
                       setBatchFormat("json");
                       setBatchText(SAMPLE_JSON_IMPORT);
                     }}
-                    className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold ${
+                    className={`px-2.5 py-1 rounded-lg text-xs font-medium ${
                       batchFormat === "json"
-                        ? "bg-sky-500/20 text-sky-300 border border-sky-500/40"
-                        : "bg-slate-800 text-slate-400"
+                        ? "bg-brand-50 text-brand-600 border border-brand-200"
+                        : "bg-slate-100 text-slate-600"
                     }`}
                   >
                     Mẫu JSON
@@ -529,10 +527,10 @@ export default function ManageCardsPage() {
                       setBatchFormat("csv");
                       setBatchText(SAMPLE_CSV_IMPORT);
                     }}
-                    className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold ${
+                    className={`px-2.5 py-1 rounded-lg text-xs font-medium ${
                       batchFormat === "csv"
-                        ? "bg-sky-500/20 text-sky-300 border border-sky-500/40"
-                        : "bg-slate-800 text-slate-400"
+                        ? "bg-brand-50 text-brand-600 border border-brand-200"
+                        : "bg-slate-100 text-slate-600"
                     }`}
                   >
                     Mẫu CSV
@@ -541,13 +539,13 @@ export default function ManageCardsPage() {
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-300">
+                <label className="text-xs font-semibold text-slate-700">
                   Chọn bộ chủ đề đích
                 </label>
                 <select
                   value={deckId}
                   onChange={(e) => setDeckId(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white"
+                  className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800"
                 >
                   {decks.map((d) => (
                     <option key={d.id} value={d.id}>
@@ -561,23 +559,23 @@ export default function ManageCardsPage() {
                 rows={8}
                 value={batchText}
                 onChange={(e) => setBatchText(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-3 text-xs font-mono text-slate-200 focus:outline-none focus:border-sky-500"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-mono text-slate-800 focus:outline-none focus:border-brand-500"
                 placeholder="Dán nội dung JSON hoặc CSV vào đây..."
               />
 
               <button
                 type="button"
                 onClick={handleBatchImport}
-                className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 font-extrabold text-xs md:text-sm flex items-center justify-center gap-2 shadow-lg"
+                className="w-full py-3 px-4 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-semibold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-xs transition-colors"
               >
                 <Upload className="w-4 h-4" />
-                <span>Nhập hàng loạt vào bộ thẻ</span>
+                <span>Nhập hàng loạt vào kho</span>
               </button>
             </div>
           )}
         </div>
 
-        {/* RIGHT COLUMN ON PC (7 Cols): Searchable Card Library */}
+        {/* RIGHT COLUMN: Searchable Card Library */}
         <div
           className={`lg:col-span-7 space-y-3.5 ${
             activeTab === "list" ? "block" : "hidden lg:block"
@@ -590,18 +588,18 @@ export default function ManageCardsPage() {
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Tìm cụm từ hoặc câu giao tiếp trong kho..."
-                className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-10 pr-3 py-2.5 text-xs md:text-sm text-white focus:outline-none focus:border-sky-500"
+                placeholder="Tìm cụm từ hoặc câu trong kho..."
+                className="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-3 py-2.5 text-xs sm:text-sm text-slate-800 focus:outline-none focus:border-brand-500 shadow-xs"
               />
             </div>
             <button
               type="button"
               onClick={handleResetSeed}
-              title="Khôi phục 30 câu mẫu ban đầu"
-              className="px-3 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 text-xs flex items-center gap-1.5 shrink-0"
+              title="Khôi phục danh sách mẫu ban đầu"
+              className="px-3 py-2.5 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-600 text-xs flex items-center gap-1.5 shrink-0 shadow-xs transition-colors"
             >
-              <RefreshCcw className="w-4 h-4 text-amber-400" />
-              <span className="font-medium">Reset 30 câu</span>
+              <RefreshCcw className="w-4 h-4 text-amber-500" />
+              <span className="font-medium hidden sm:inline">Khôi phục</span>
             </button>
           </div>
 
@@ -609,19 +607,19 @@ export default function ManageCardsPage() {
             {filteredCards.map((card) => (
               <div
                 key={card.id}
-                className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between gap-2.5"
+                className="bg-white border border-slate-200 rounded-2xl p-4 flex flex-col justify-between gap-2.5 shadow-xs"
               >
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-xs md:text-sm font-extrabold text-sky-400">
+                      <span className="text-xs sm:text-sm font-bold text-brand-600">
                         {card.phrase_en}
                       </span>
                       <span className="text-[11px] font-mono text-slate-400">
                         {card.ipa}
                       </span>
                     </div>
-                    <p className="text-xs font-semibold text-emerald-400 mt-0.5">
+                    <p className="text-xs font-semibold text-emerald-700 mt-0.5">
                       {card.meaning_vi}
                     </p>
                   </div>
@@ -630,7 +628,7 @@ export default function ManageCardsPage() {
                     <button
                       type="button"
                       onClick={() => speakEnglish(card.sentence_en, 1.0)}
-                      className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-sky-400"
+                      className="p-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 text-brand-600 border border-slate-200"
                       title="Nghe phát âm"
                     >
                       <Volume2 className="w-3.5 h-3.5" />
@@ -638,7 +636,7 @@ export default function ManageCardsPage() {
                     <button
                       type="button"
                       onClick={() => handleDeleteCard(card.id)}
-                      className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-950 text-slate-400 hover:text-rose-400"
+                      className="p-1.5 rounded-lg bg-slate-50 hover:bg-rose-50 text-slate-400 hover:text-rose-500 border border-slate-200"
                       title="Xóa thẻ"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -646,9 +644,9 @@ export default function ManageCardsPage() {
                   </div>
                 </div>
 
-                <div className="text-xs space-y-1 pt-2 border-t border-slate-800/80">
-                  <p className="text-white font-medium">{card.sentence_en}</p>
-                  <p className="text-slate-400">{card.sentence_vi}</p>
+                <div className="text-xs space-y-0.5 pt-2 border-t border-slate-100">
+                  <p className="text-slate-900 font-medium">{card.sentence_en}</p>
+                  <p className="text-slate-500">{card.sentence_vi}</p>
                 </div>
               </div>
             ))}
