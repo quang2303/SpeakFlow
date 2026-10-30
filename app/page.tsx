@@ -13,6 +13,9 @@ import {
   MessageSquare,
   Clock,
   ArrowRight,
+  Terminal,
+  FileText,
+  Award,
 } from "lucide-react";
 import {
   getCards,
@@ -37,6 +40,12 @@ function getDeckIcon(iconName: string) {
       return Plane;
     case "Users":
       return Users;
+    case "Terminal":
+      return Terminal;
+    case "FileText":
+      return FileText;
+    case "Award":
+      return Award;
     default:
       return MessageSquare;
   }

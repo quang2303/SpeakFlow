@@ -184,6 +184,7 @@ export default function ManageCardsPage() {
       context_note:
         contextNote.trim() ||
         "Hãy đọc to cả câu để ghi nhớ ngữ cảnh phản xạ.",
+      variations: [],
     });
 
     setPhraseEn("");

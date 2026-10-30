@@ -469,7 +469,7 @@ export default function ProfilePage() {
               Giai đoạn ghi nhớ Spaced Repetition (SRS)
             </h2>
             <p className="text-xs text-slate-500">
-              Phân loại 100 mẫu câu theo 5 hộp trí nhớ Leitner của thuật toán SM-2
+              Phân loại {totalCards} mẫu câu theo 5 hộp trí nhớ Leitner của thuật toán SM-2
             </p>
           </div>
           <Link
@@ -791,7 +791,7 @@ export default function ProfilePage() {
                 Đặt lại toàn bộ lịch ôn tập?
               </h3>
               <p className="text-xs text-slate-500 leading-relaxed">
-                Hành động này sẽ đưa toàn bộ 100 mẫu câu về trạng thái ban đầu để bạn bắt đầu học lại từ đầu chu trình SM-2.
+                Hành động này sẽ đưa toàn bộ {totalCards} mẫu câu về trạng thái ban đầu để bạn bắt đầu học lại từ đầu chu trình SM-2.
               </p>
             </div>
 

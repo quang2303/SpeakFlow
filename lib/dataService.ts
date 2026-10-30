@@ -97,7 +97,7 @@ export const DEMO_ACCOUNTS: DemoAccountPreset[] = [
     persona_label: "🔥 Học viên chăm chỉ",
     badge_color: "emerald",
     description:
-      "Streak 14 ngày liên tiếp • Đã luyện 42/100 mẫu câu • Phát âm chuẩn 92%.",
+      "Streak 14 ngày liên tiếp • Đã luyện 42/108 mẫu câu • Phát âm chuẩn 92%.",
     preset_streak: 14,
     preset_practiced_count: 42,
     preset_mastered_count: 28,
@@ -1130,7 +1130,7 @@ const SEED_ACTIVITY_LOGS: StudyActivityLog[] = [
     user_name: "Trần Hoàng Nam",
     user_email: "phatamyeu@speakflow.vn",
     mode: "shadowing",
-    card_id: "30000000-0000-4000-8000-000000000001",
+    card_id: "60000000-0000-4000-8000-000000000001",
     phrase_en: "aisle seat",
     sentence_en: "Could I get an aisle seat instead of a window seat, please?",
     spoken_text: "Could I get an ai-sờ-lờ seat in-sờ-tít of a window seat",
@@ -1144,7 +1144,7 @@ const SEED_ACTIVITY_LOGS: StudyActivityLog[] = [
     user_name: "Trần Hoàng Nam",
     user_email: "phatamyeu@speakflow.vn",
     mode: "reflex",
-    card_id: "20000000-0000-4000-8000-000000000024",
+    card_id: "20000000-0000-4000-8000-000000000009",
     phrase_en: "bottleneck",
     sentence_en:
       "Waiting for legal approval is our biggest bottleneck right now.",
@@ -1159,7 +1159,7 @@ const SEED_ACTIVITY_LOGS: StudyActivityLog[] = [
     user_name: "Trần Hoàng Nam",
     user_email: "phatamyeu@speakflow.vn",
     mode: "study",
-    card_id: "20000000-0000-4000-8000-000000000005",
+    card_id: "10000000-0000-4000-8000-000000000010",
     phrase_en: "tight schedule",
     sentence_en: "We are working on a very tight schedule this week.",
     spoken_text: "We are working on a very tai sờ-ke-đu this week",
@@ -1189,7 +1189,7 @@ const SEED_ACTIVITY_LOGS: StudyActivityLog[] = [
     user_name: "Nguyễn Minh Anh",
     user_email: "chamchi@speakflow.vn",
     mode: "shadowing",
-    card_id: "20000000-0000-4000-8000-000000000001",
+    card_id: "10000000-0000-4000-8000-000000000007",
     phrase_en: "on the same page",
     sentence_en: "Let's make sure we are all on the same page before we start.",
     spoken_text: "Let's make sure we are all on the same page before we start",
@@ -1204,7 +1204,7 @@ const SEED_ACTIVITY_LOGS: StudyActivityLog[] = [
     user_name: "Nguyễn Minh Anh",
     user_email: "chamchi@speakflow.vn",
     mode: "study",
-    card_id: "10000000-0000-4000-8000-000000000003",
+    card_id: "50000000-0000-4000-8000-000000000010",
     phrase_en: "slip my mind",
     sentence_en: "Sorry, it completely slipped my mind!",
     spoken_text: "Sorry it com-pờ-lít slipped my mind",
@@ -1219,7 +1219,7 @@ const SEED_ACTIVITY_LOGS: StudyActivityLog[] = [
     user_name: "Nguyễn Minh Anh",
     user_email: "chamchi@speakflow.vn",
     mode: "reflex",
-    card_id: "30000000-0000-4000-8000-000000000008",
+    card_id: "60000000-0000-4000-8000-000000000015",
     phrase_en: "itinerary",
     sentence_en: "Could you send me the updated travel itinerary by noon?",
     spoken_text: "Could you send me the updated travel ai-ti-ne-ri by noon",
@@ -1247,7 +1247,7 @@ const SEED_ACTIVITY_LOGS: StudyActivityLog[] = [
     user_name: "Lê Quốc Bảo",
     user_email: "bikhoa@speakflow.vn",
     mode: "study",
-    card_id: "20000000-0000-4000-8000-000000000010",
+    card_id: "20000000-0000-4000-8000-000000000008",
     phrase_en: "from scratch",
     sentence_en: "We had to build the entire prototype from scratch.",
     spoken_text: "We had to build the entire pro-tô-tai from sờ-cát",
@@ -2520,17 +2520,25 @@ function ensureLocalSeed(): { decks: Deck[]; cards: Card[] } {
         const seedDeck = seedDeckMap.get(d.id);
         if (
           seedDeck &&
-          (d.title !== seedDeck.title || d.description !== seedDeck.description)
+          (d.title !== seedDeck.title || d.description !== seedDeck.description || d.icon !== seedDeck.icon)
         ) {
           decksChanged = true;
           return {
             ...d,
             title: seedDeck.title,
             description: seedDeck.description,
+            icon: seedDeck.icon,
           };
         }
         return d;
       });
+      // Check for missing seed decks (e.g. newly introduced decks)
+      const existingDeckIds = new Set(decks.map((d) => d.id));
+      const missingDecks = SEED_DECKS.filter((sd) => !existingDeckIds.has(sd.id));
+      if (missingDecks.length > 0) {
+        decks = [...decks, ...missingDecks];
+        decksChanged = true;
+      }
       if (decksChanged) {
         window.localStorage.setItem(STORAGE_KEYS.DECKS, JSON.stringify(decks));
       }
@@ -2553,8 +2561,30 @@ function ensureLocalSeed(): { decks: Deck[]; cards: Card[] } {
       const missingSeedCards = SEED_CARDS.filter(
         (sc) => !existingIds.has(sc.id)
       );
+      const seedCardMap = new Map(SEED_CARDS.map((c) => [c.id, c]));
+      let cardsChanged = false;
+      cards = cards.map((c) => {
+        const sc = seedCardMap.get(c.id);
+        if (sc && (!c.variations || c.variations.length === 0 || c.phrase_en !== sc.phrase_en)) {
+          cardsChanged = true;
+          return {
+            ...c,
+            phrase_en: sc.phrase_en,
+            ipa: sc.ipa,
+            meaning_vi: sc.meaning_vi,
+            sentence_en: sc.sentence_en,
+            sentence_vi: sc.sentence_vi,
+            context_note: sc.context_note,
+            variations: sc.variations,
+          };
+        }
+        return c;
+      });
       if (missingSeedCards.length > 0) {
         cards = [...cards, ...missingSeedCards];
+        cardsChanged = true;
+      }
+      if (cardsChanged) {
         window.localStorage.setItem(STORAGE_KEYS.CARDS, JSON.stringify(cards));
       }
     }
@@ -2581,6 +2611,15 @@ export async function getDecks(): Promise<Deck[]> {
         .order("created_at", { ascending: true });
 
       if (!error && data) {
+        if (data.length < SEED_DECKS.length) {
+          const { data: seededDecks, error: seedErr } = await supabase
+            .from("decks")
+            .upsert(SEED_DECKS, { onConflict: "id" })
+            .select("*");
+          if (!seedErr && seededDecks && seededDecks.length > 0) {
+            return seededDecks as Deck[];
+          }
+        }
         if (data.length > 0) {
           return data as Deck[];
         }
@@ -2929,6 +2968,7 @@ export async function addCard(
   const nowIso = new Date().toISOString();
   const newCard: Card = {
     ...newCardInput,
+    variations: newCardInput.variations || [],
     id:
       typeof crypto !== "undefined" && crypto.randomUUID
         ? crypto.randomUUID()
@@ -3002,6 +3042,7 @@ export async function importCardsBatch(
       context_note:
         item.context_note?.trim() ||
         "Cụm từ tự thêm để luyện phản xạ giao tiếp.",
+      variations: (item as { variations?: string[] }).variations || [],
       box: 1,
       interval_days: 0,
       ease_factor: 2.5,

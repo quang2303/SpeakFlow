@@ -730,6 +730,21 @@ function StudySessionContent() {
                           </p>
                         </div>
                       )}
+
+                      {currentCard.variations && currentCard.variations.length > 0 && (
+                        <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3 space-y-1.5">
+                          <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                            Biến thể câu giao tiếp thực tế
+                          </p>
+                          <div className="space-y-1">
+                            {currentCard.variations.map((v, idx) => (
+                              <p key={idx} className="text-xs text-slate-700 font-medium">
+                                • {v}
+                              </p>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {/* Audio Controls */}
