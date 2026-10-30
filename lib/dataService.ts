@@ -2646,6 +2646,14 @@ export async function getDecks(): Promise<Deck[]> {
 }
 
 /**
+ * Strip client-only fields before sending to Supabase schema
+ */
+function sanitizeCardForSupabase(card: Card | Record<string, any>): Record<string, any> {
+  const { variations, ...rest } = card as Card & { variations?: string[] };
+  return rest;
+}
+
+/**
  * Fetch all cards (optionally filtered by deck_id) + merge logged-in Google user's personal SRS progress
  */
 export async function getCards(deckId?: string): Promise<Card[]> {
@@ -2676,7 +2684,7 @@ export async function getCards(deckId?: string): Promise<Card[]> {
           if (missingSeedCards.length > 0) {
             const { data: insertedCards, error: seedErr } = await supabase
               .from("cards")
-              .upsert(missingSeedCards, { onConflict: "id" })
+              .upsert(missingSeedCards.map(sanitizeCardForSupabase), { onConflict: "id" })
               .select("*");
             if (!seedErr && insertedCards && insertedCards.length > 0) {
               baseCards = [...baseCards, ...(insertedCards as Card[])];
@@ -2696,13 +2704,26 @@ export async function getCards(deckId?: string): Promise<Card[]> {
               .upsert(SEED_DECKS, { onConflict: "id" });
             const { data: insertedDeckCards, error: seedErr } = await supabase
               .from("cards")
-              .upsert(missingForDeck, { onConflict: "id" })
+              .upsert(missingForDeck.map(sanitizeCardForSupabase), { onConflict: "id" })
               .select("*");
             if (!seedErr && insertedDeckCards && insertedDeckCards.length > 0) {
               baseCards = [...baseCards, ...(insertedDeckCards as Card[])];
             }
           }
         }
+
+        // Always attach variations from seed map if missing from DB schema
+        const seedCardMap = new Map(SEED_CARDS.map((c) => [c.id, c]));
+        baseCards = baseCards.map((card) => {
+          const sc = seedCardMap.get(card.id);
+          return {
+            ...card,
+            variations:
+              card.variations && card.variations.length > 0
+                ? card.variations
+                : sc?.variations || [],
+          };
+        });
 
         // If a Google user is logged in, overlay their personal `user_card_progress`
         if (activeUser && baseCards.length > 0) {
@@ -3002,7 +3023,7 @@ export async function addCard(
         : newCard;
       const { data, error } = await supabase
         .from("cards")
-        .insert([payload])
+        .insert([sanitizeCardForSupabase(payload)])
         .select()
         .single();
       if (!error && data) {
@@ -3070,8 +3091,8 @@ export async function importCardsBatch(
   if (supabase) {
     try {
       const payload = activeUser
-        ? createdCards.map((c) => ({ ...c, user_id: activeUser.id }))
-        : createdCards;
+        ? createdCards.map((c) => sanitizeCardForSupabase({ ...c, user_id: activeUser.id }))
+        : createdCards.map(sanitizeCardForSupabase);
       await supabase.from("cards").insert(payload);
     } catch {
       // Fallback already saved locally
