@@ -154,20 +154,20 @@ export default function TopHeaderBar() {
             </Link>
           )}
 
-          {/* User Account / Login Button */}
+          {/* User Account / Profile Button */}
           {user ? (
             <div className="flex items-center gap-2">
               <Link
-                href="/login"
-                className="flex items-center gap-2 px-2.5 py-1 rounded-xl hover:bg-slate-50 transition-colors text-left"
-                title="Đổi tài khoản"
+                href="/profile"
+                className="flex items-center gap-2 px-2.5 py-1 rounded-xl hover:bg-slate-50 transition-colors text-left group"
+                title="Xem thông tin học viên & Tiến trình"
               >
                 <UserAvatar
                   user={user}
                   sizeClass="w-7 h-7 rounded-lg text-xs"
                   showOnlineDot={user.status !== "locked"}
                 />
-                <span className="hidden sm:inline text-xs font-semibold text-slate-800 max-w-[120px] truncate">
+                <span className="hidden sm:inline text-xs font-semibold text-slate-800 max-w-[120px] truncate group-hover:text-brand-600 transition-colors">
                   {displayName}
                 </span>
               </Link>

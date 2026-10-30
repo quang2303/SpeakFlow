@@ -1845,6 +1845,27 @@ export function getAllUsersForAdmin(): AdminStudentMetrics[] {
 }
 
 /**
+ * Get detailed learning metrics, SRS box breakdown, and AI pronunciation diagnostics for a student
+ */
+export function getStudentProfileMetrics(userId?: string): AdminStudentMetrics | null {
+  const current = getStoredUserProfile();
+  const all = getAllUsersForAdmin();
+  if (userId) {
+    const byId = all.find((u) => u.profile.id === userId);
+    if (byId) return byId;
+  }
+  if (current?.id) {
+    const byCurrentId = all.find((u) => u.profile.id === current.id);
+    if (byCurrentId) return byCurrentId;
+  }
+  if (current?.email) {
+    const byEmail = all.find((u) => u.profile.email.toLowerCase() === current.email.toLowerCase());
+    if (byEmail) return byEmail;
+  }
+  return all[0] || null;
+}
+
+/**
  * Admin CRUD: Create a new student or admin account without switching current Admin session
  */
 export function createAccountByAdmin(input: {

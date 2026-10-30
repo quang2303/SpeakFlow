@@ -179,35 +179,41 @@ export default function BottomNav() {
           <div className="pt-4 border-t border-slate-100">
             {user ? (
               <div
-                className={`flex items-center gap-3 p-2 rounded-2xl bg-slate-50 border border-slate-200/80 ${
+                className={`flex items-center gap-2 p-2 rounded-2xl bg-slate-50 border border-slate-200/80 ${
                   collapsed ? "justify-center p-2" : ""
                 }`}
               >
-                <UserAvatar
-                  user={user}
-                  sizeClass="w-9 h-9 rounded-xl text-xs"
-                  showOnlineDot={user.status !== "locked"}
-                />
+                <Link
+                  href="/profile"
+                  className="flex items-center gap-3 min-w-0 flex-1 group"
+                  title="Xem thông tin học viên & Tiến trình"
+                >
+                  <UserAvatar
+                    user={user}
+                    sizeClass="w-9 h-9 rounded-xl text-xs"
+                    showOnlineDot={user.status !== "locked"}
+                  />
 
-                {!collapsed && (
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold text-slate-900 truncate leading-tight">
-                      {displayName}
-                    </p>
-                    <div className="flex items-center gap-1.5 mt-0.5">
-                      <span className="w-1.5 h-1.5 rounded-full bg-brand-500 shrink-0" />
-                      <span className="text-xs text-slate-500 font-medium truncate">
-                        {user.role === "admin" ? "Quản trị viên" : "Học viên"}
-                      </span>
+                  {!collapsed && (
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-slate-900 truncate leading-tight group-hover:text-brand-600 transition-colors">
+                        {displayName}
+                      </p>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-brand-500 shrink-0" />
+                        <span className="text-xs text-slate-500 font-medium truncate">
+                          {user.role === "admin" ? "Quản trị viên" : "Học viên"}
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
+                </Link>
 
                 {!collapsed && (
                   <button
                     type="button"
                     onClick={handleLogout}
-                    className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                    className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors shrink-0"
                     title="Đăng xuất"
                     aria-label="Đăng xuất"
                   >
@@ -217,32 +223,38 @@ export default function BottomNav() {
               </div>
             ) : (
               <div
-                className={`flex items-center gap-3 p-2 rounded-2xl bg-slate-50 border border-slate-200/80 ${
+                className={`flex items-center gap-2 p-2 rounded-2xl bg-slate-50 border border-slate-200/80 ${
                   collapsed ? "justify-center p-2" : ""
                 }`}
               >
-                <div className="w-9 h-9 rounded-xl bg-brand-100 text-brand-700 flex items-center justify-center font-bold text-xs shrink-0">
-                  QĐ
-                </div>
-
-                {!collapsed && (
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold text-slate-900 truncate leading-tight">
-                      Quang Đức
-                    </p>
-                    <div className="flex items-center gap-1.5 mt-0.5">
-                      <span className="w-1.5 h-1.5 rounded-full bg-brand-500 shrink-0" />
-                      <span className="text-xs text-slate-500 font-medium">
-                        Học viên
-                      </span>
-                    </div>
+                <Link
+                  href="/profile"
+                  className="flex items-center gap-3 min-w-0 flex-1 group"
+                  title="Xem thông tin học viên"
+                >
+                  <div className="w-9 h-9 rounded-xl bg-brand-100 text-brand-700 flex items-center justify-center font-bold text-xs shrink-0 group-hover:bg-brand-200 transition-colors">
+                    QĐ
                   </div>
-                )}
+
+                  {!collapsed && (
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-slate-900 truncate leading-tight group-hover:text-brand-600 transition-colors">
+                        Quang Đức
+                      </p>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-brand-500 shrink-0" />
+                        <span className="text-xs text-slate-500 font-medium">
+                          Học viên
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </Link>
 
                 {!collapsed && (
                   <Link
                     href="/login"
-                    className="p-1.5 rounded-lg text-brand-600 hover:bg-brand-50 transition-colors"
+                    className="p-1.5 rounded-lg text-brand-600 hover:bg-brand-50 transition-colors shrink-0"
                     title="Đăng nhập tài khoản"
                   >
                     <LogIn className="w-4 h-4" />
