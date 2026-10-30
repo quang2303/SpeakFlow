@@ -4,11 +4,19 @@ export interface Deck {
   description: string;
   icon: string;
   created_at: string;
+  user_id?: string | null;
+  is_system?: boolean;
+  is_public?: boolean;
+  share_code?: string;
+  cloned_from_id?: string | null;
+  clone_count?: number;
+  author_name?: string | null;
 }
 
 export interface Card {
   id: string;
   deck_id: string;
+  user_id?: string | null;
   phrase_en: string;
   ipa: string;
   meaning_vi: string;
@@ -23,6 +31,23 @@ export interface Card {
   last_practiced_at: string | null;
 }
 
+export const SYSTEM_DECK_IDS = new Set([
+  "11111111-1111-4111-8111-111111111111",
+  "22222222-2222-4222-8222-222222222222",
+  "33333333-3333-4333-8333-333333333333",
+  "44444444-4444-4444-8444-444444444444",
+  "55555555-5555-4555-8555-555555555555",
+  "66666666-6666-4666-8666-666666666666",
+]);
+
+export function isSystemDeck(deckId: string): boolean {
+  return SYSTEM_DECK_IDS.has(deckId);
+}
+
+export function isSystemCard(card: Card): boolean {
+  return !card.user_id && isSystemDeck(card.deck_id);
+}
+
 const nowIso = new Date().toISOString();
 
 export const SEED_DECKS: Deck[] = [
@@ -31,42 +56,54 @@ export const SEED_DECKS: Deck[] = [
     "title": "Giao tiếp Công sở & Họp hành",
     "description": "Báo cáo tiến độ, giải quyết sự cố, chốt deadline và cách trình bày ý kiến lịch sự, thuyết phục.",
     "icon": "Briefcase",
-    "created_at": nowIso
+    "created_at": nowIso,
+    "is_system": true,
+    "is_public": true
   },
   {
     "id": "22222222-2222-4222-8222-222222222222",
     "title": "Kỹ thuật, IT & Vận hành Hệ thống",
     "description": "Trao đổi Daily Standup, xử lý lỗi hệ thống, deploy phần mềm và giải thích kỹ thuật cho đối tác.",
     "icon": "Terminal",
-    "created_at": nowIso
+    "created_at": nowIso,
+    "is_system": true,
+    "is_public": true
   },
   {
     "id": "33333333-3333-4333-8333-333333333333",
     "title": "Hành chính công & Giao tiếp Khách hàng",
     "description": "Hướng dẫn thủ tục, tiếp nhận yêu cầu, giải thích giấy tờ và giữ thái độ lịch sự, chuyên nghiệp.",
     "icon": "FileText",
-    "created_at": nowIso
+    "created_at": nowIso,
+    "is_system": true,
+    "is_public": true
   },
   {
     "id": "44444444-4444-4444-8444-444444444444",
     "title": "Phỏng vấn Xin việc & Deal Lương",
     "description": "Giới thiệu bản thân, chia sẻ kinh nghiệm thực tế, ứng biến tình huống và đàm phán đãi ngộ.",
     "icon": "Award",
-    "created_at": nowIso
+    "created_at": nowIso,
+    "is_system": true,
+    "is_public": true
   },
   {
     "id": "55555555-5555-4555-8555-555555555555",
     "title": "Small Talk & Kết bạn Hàng ngày",
     "description": "Bắt chuyện làm quen, nói về kế hoạch cuối tuần, bày tỏ cảm xúc và giữ mạch trò chuyện tự nhiên.",
     "icon": "Zap",
-    "created_at": nowIso
+    "created_at": nowIso,
+    "is_system": true,
+    "is_public": true
   },
   {
     "id": "66666666-6666-4666-8666-666666666666",
     "title": "Du lịch, Sân bay & Xử lý tình huống khẩn cấp",
     "description": "Làm thủ tục sân bay, đặt bàn, hỏi đường, mua sắm và xử lý tình huống phát sinh khẩn cấp.",
     "icon": "Plane",
-    "created_at": nowIso
+    "created_at": nowIso,
+    "is_system": true,
+    "is_public": true
   }
 ];
 

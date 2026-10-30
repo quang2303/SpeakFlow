@@ -36,6 +36,20 @@ BEGIN
     last_practiced_at TIMESTAMPTZ
   );
 
+  -- Ensure custom deck ownership & sharing columns exist on `decks`
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'decks' AND column_name = 'user_id'
+  ) THEN
+    ALTER TABLE public.decks ADD COLUMN user_id UUID;
+    ALTER TABLE public.decks ADD COLUMN is_system BOOLEAN NOT NULL DEFAULT false;
+    ALTER TABLE public.decks ADD COLUMN is_public BOOLEAN NOT NULL DEFAULT false;
+    ALTER TABLE public.decks ADD COLUMN share_code VARCHAR(32);
+    ALTER TABLE public.decks ADD COLUMN cloned_from_id UUID;
+    ALTER TABLE public.decks ADD COLUMN clone_count INT NOT NULL DEFAULT 0;
+    ALTER TABLE public.decks ADD COLUMN author_name TEXT;
+  END IF;
+
   -- Ensure `user_id` column exists on `cards` if table was created earlier
   IF NOT EXISTS (
     SELECT 1 FROM information_schema.columns

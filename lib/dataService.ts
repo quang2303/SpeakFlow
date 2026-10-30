@@ -1,5 +1,13 @@
 import { createClient, SupabaseClient, User } from "@supabase/supabase-js";
-import { Card, Deck, SEED_CARDS, SEED_DECKS } from "./seedData";
+import {
+  Card,
+  Deck,
+  SEED_CARDS,
+  SEED_DECKS,
+  SYSTEM_DECK_IDS,
+  isSystemDeck,
+  isSystemCard,
+} from "./seedData";
 import { calculateNextSRS, isCardDue, SRSRating } from "./srs";
 
 const STORAGE_KEYS = {
@@ -2617,24 +2625,31 @@ export async function getDecks(): Promise<Deck[]> {
         .order("created_at", { ascending: true });
 
       if (!error && data) {
-        if (data.length < SEED_DECKS.length) {
-          const { data: seededDecks, error: seedErr } = await supabase
-            .from("decks")
-            .upsert(SEED_DECKS, { onConflict: "id" })
-            .select("*");
-          if (!seedErr && seededDecks && seededDecks.length > 0) {
-            return seededDecks as Deck[];
+        const seedDeckMap = new Map(SEED_DECKS.map((d) => [d.id, d]));
+        let baseDecks: Deck[] = data.map((d: any) => {
+          const sd = seedDeckMap.get(d.id);
+          const isSys = isSystemDeck(d.id);
+          return {
+            ...d,
+            is_system: isSys,
+            is_public: isSys ? true : Boolean(d.is_public),
+            title: sd?.title || d.title,
+            description: sd?.description || d.description,
+            icon: sd?.icon || d.icon,
+          };
+        });
+
+        if (typeof window !== "undefined") {
+          const { decks: localDecks } = ensureLocalSeed();
+          const dbIds = new Set(baseDecks.map((d) => d.id));
+          const extraLocal = localDecks.filter((ld) => !dbIds.has(ld.id));
+          if (extraLocal.length > 0) {
+            baseDecks = [...baseDecks, ...extraLocal];
           }
         }
-        if (data.length > 0) {
-          return data as Deck[];
-        }
-        const { data: seededDecks, error: seedErr } = await supabase
-          .from("decks")
-          .upsert(SEED_DECKS, { onConflict: "id" })
-          .select("*");
-        if (!seedErr && seededDecks && seededDecks.length > 0) {
-          return seededDecks as Deck[];
+
+        if (baseDecks.length > 0) {
+          return baseDecks;
         }
       }
     } catch {
@@ -2993,9 +3008,11 @@ export async function addCard(
   >
 ): Promise<Card> {
   const nowIso = new Date().toISOString();
+  const activeUser = getStoredUserProfile();
   const newCard: Card = {
     ...newCardInput,
     variations: newCardInput.variations || [],
+    user_id: activeUser ? activeUser.id : null,
     id:
       typeof crypto !== "undefined" && crypto.randomUUID
         ? crypto.randomUUID()
@@ -3015,7 +3032,6 @@ export async function addCard(
   }
 
   const supabase = getSupabaseClient();
-  const activeUser = getStoredUserProfile();
   if (supabase) {
     try {
       const payload = activeUser
@@ -3103,11 +3119,25 @@ export async function importCardsBatch(
 }
 
 /**
- * Delete a card by ID
+ * Delete a card by ID (with strict system card protection)
  */
-export async function deleteCard(cardId: string): Promise<void> {
+export async function deleteCard(cardId: string): Promise<{ success: boolean; message?: string }> {
+  const activeUser = getStoredUserProfile();
+  const isAdmin = activeUser?.role === "admin";
+
+  let targetCard: Card | undefined;
   if (typeof window !== "undefined") {
     const { cards } = ensureLocalSeed();
+    targetCard = cards.find((c) => c.id === cardId);
+
+    // Strict security check: prevent regular users from deleting system cards
+    if (targetCard && isSystemCard(targetCard) && !isAdmin) {
+      return {
+        success: false,
+        message: "Không thể xóa thẻ học chuẩn của hệ thống! Bạn chỉ có thể xóa thẻ trong kho cá nhân của mình.",
+      };
+    }
+
     const filtered = cards.filter((c) => c.id !== cardId);
     window.localStorage.setItem(STORAGE_KEYS.CARDS, JSON.stringify(filtered));
     memoryCachedCards = filtered;
@@ -3116,11 +3146,298 @@ export async function deleteCard(cardId: string): Promise<void> {
   const supabase = getSupabaseClient();
   if (supabase) {
     try {
-      await supabase.from("cards").delete().eq("id", cardId);
+      let query = supabase.from("cards").delete().eq("id", cardId);
+      if (!isAdmin) {
+        if (activeUser?.id) {
+          query = query.eq("user_id", activeUser.id);
+        } else {
+          query = query.not("user_id", "is", null);
+        }
+      }
+      await query;
     } catch {
       // ignore
     }
   }
+
+  return { success: true };
+}
+
+/**
+ * Create a new personal custom deck for the current user
+ */
+export async function createCustomDeck(params: {
+  title: string;
+  description?: string;
+  icon?: string;
+  is_public?: boolean;
+}): Promise<Deck> {
+  const activeUser = getStoredUserProfile();
+  const nowIso = new Date().toISOString();
+  const newId =
+    typeof crypto !== "undefined" && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `deck-${Date.now()}`;
+  const shareCode = Math.random().toString(36).substring(2, 10);
+
+  const newDeck: Deck = {
+    id: newId,
+    title: params.title.trim(),
+    description: (params.description || "").trim(),
+    icon: params.icon || "BookOpen",
+    created_at: nowIso,
+    user_id: activeUser ? activeUser.id : null,
+    is_system: false,
+    is_public: Boolean(params.is_public),
+    share_code: shareCode,
+    author_name: activeUser?.full_name || "Học viên",
+    clone_count: 0,
+  };
+
+  if (typeof window !== "undefined") {
+    const { decks } = ensureLocalSeed();
+    const updated = [...decks, newDeck];
+    window.localStorage.setItem(STORAGE_KEYS.DECKS, JSON.stringify(updated));
+    memoryCachedDecks = updated;
+  }
+
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    try {
+      const {
+        user_id,
+        is_system,
+        is_public,
+        share_code,
+        cloned_from_id,
+        clone_count,
+        author_name,
+        ...basePayload
+      } = newDeck;
+      await supabase.from("decks").insert([basePayload]);
+    } catch {
+      // Fallback already saved locally
+    }
+  }
+
+  return newDeck;
+}
+
+/**
+ * Delete a custom deck (system decks cannot be deleted)
+ */
+export async function deleteCustomDeck(
+  deckId: string
+): Promise<{ success: boolean; message?: string }> {
+  if (isSystemDeck(deckId)) {
+    return {
+      success: false,
+      message: "Không thể xóa bộ thẻ chuẩn của hệ thống!",
+    };
+  }
+
+  if (typeof window !== "undefined") {
+    const { decks, cards } = ensureLocalSeed();
+    const updatedDecks = decks.filter((d) => d.id !== deckId);
+    const updatedCards = cards.filter((c) => c.deck_id !== deckId);
+    window.localStorage.setItem(STORAGE_KEYS.DECKS, JSON.stringify(updatedDecks));
+    window.localStorage.setItem(STORAGE_KEYS.CARDS, JSON.stringify(updatedCards));
+    memoryCachedDecks = updatedDecks;
+    memoryCachedCards = updatedCards;
+  }
+
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    try {
+      await supabase.from("cards").delete().eq("deck_id", deckId);
+      await supabase.from("decks").delete().eq("id", deckId);
+    } catch {
+      // ignore
+    }
+  }
+
+  return { success: true };
+}
+
+/**
+ * Update metadata of a custom deck
+ */
+export async function updateCustomDeck(
+  deckId: string,
+  updates: Partial<Pick<Deck, "title" | "description" | "icon" | "is_public">>
+): Promise<Deck | null> {
+  if (isSystemDeck(deckId)) {
+    return null;
+  }
+
+  let updatedDeck: Deck | null = null;
+  if (typeof window !== "undefined") {
+    const { decks } = ensureLocalSeed();
+    const updated = decks.map((d) => {
+      if (d.id === deckId) {
+        updatedDeck = { ...d, ...updates };
+        return updatedDeck;
+      }
+      return d;
+    });
+    window.localStorage.setItem(STORAGE_KEYS.DECKS, JSON.stringify(updated));
+    memoryCachedDecks = updated;
+  }
+
+  const supabase = getSupabaseClient();
+  if (supabase && updatedDeck) {
+    try {
+      const current = updatedDeck as Deck;
+      const {
+        user_id,
+        is_system,
+        is_public,
+        share_code,
+        cloned_from_id,
+        clone_count,
+        author_name,
+        ...basePayload
+      } = current;
+      await supabase.from("decks").update(basePayload).eq("id", deckId);
+    } catch {
+      // ignore
+    }
+  }
+
+  return updatedDeck;
+}
+
+/**
+ * Clone/Fork an entire deck (system or community) into the current user's library
+ */
+export async function cloneDeckToMyLibrary(
+  deckId: string
+): Promise<{ deck: Deck; cardCount: number }> {
+  const activeUser = getStoredUserProfile();
+  const allDecks = await getDecks();
+  const sourceDeck = allDecks.find((d) => d.id === deckId);
+  if (!sourceDeck) {
+    throw new Error("Không tìm thấy bộ thẻ nguồn");
+  }
+
+  const sourceCards = await getCards(deckId);
+  const nowIso = new Date().toISOString();
+  const newDeckId =
+    typeof crypto !== "undefined" && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `deck-${Date.now()}`;
+  const shareCode = Math.random().toString(36).substring(2, 10);
+
+  const clonedDeck: Deck = {
+    id: newDeckId,
+    title: isSystemDeck(deckId)
+      ? `${sourceDeck.title} (Kho của tôi)`
+      : `${sourceDeck.title} (Bản sao)`,
+    description:
+      sourceDeck.description || `Được sao chép từ ${sourceDeck.title}`,
+    icon: sourceDeck.icon || "BookOpen",
+    created_at: nowIso,
+    user_id: activeUser ? activeUser.id : null,
+    is_system: false,
+    is_public: false,
+    share_code: shareCode,
+    cloned_from_id: sourceDeck.id,
+    author_name: activeUser?.full_name || "Học viên",
+    clone_count: 0,
+  };
+
+  const clonedCards: Card[] = sourceCards.map((sc, idx) => ({
+    ...sc,
+    id:
+      typeof crypto !== "undefined" && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `card-${Date.now()}-${idx}`,
+    deck_id: newDeckId,
+    user_id: activeUser ? activeUser.id : null,
+    box: 1,
+    interval_days: 0,
+    ease_factor: 2.5,
+    next_review_at: nowIso,
+    last_practiced_at: null,
+  }));
+
+  if (typeof window !== "undefined") {
+    const { decks, cards } = ensureLocalSeed();
+    const updatedDecks = [...decks, clonedDeck];
+    const updatedCards = [...clonedCards, ...cards];
+    window.localStorage.setItem(STORAGE_KEYS.DECKS, JSON.stringify(updatedDecks));
+    window.localStorage.setItem(STORAGE_KEYS.CARDS, JSON.stringify(updatedCards));
+    memoryCachedDecks = updatedDecks;
+    memoryCachedCards = updatedCards;
+  }
+
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    try {
+      const {
+        user_id,
+        is_system,
+        is_public,
+        share_code,
+        cloned_from_id,
+        clone_count,
+        author_name,
+        ...baseDeck
+      } = clonedDeck;
+      await supabase.from("decks").insert([baseDeck]);
+      const sanitized = clonedCards.map((c) => sanitizeCardForSupabase(c));
+      await supabase.from("cards").insert(sanitized);
+    } catch {
+      // fallback
+    }
+  }
+
+  return { deck: clonedDeck, cardCount: clonedCards.length };
+}
+
+/**
+ * Toggle sharing for a custom deck (Private vs Public link)
+ */
+export async function toggleDeckSharing(
+  deckId: string,
+  isPublic: boolean
+): Promise<Deck | null> {
+  if (isSystemDeck(deckId)) return null;
+
+  let updatedDeck: Deck | null = null;
+  if (typeof window !== "undefined") {
+    const { decks } = ensureLocalSeed();
+    const updated = decks.map((d) => {
+      if (d.id === deckId) {
+        updatedDeck = {
+          ...d,
+          is_public: isPublic,
+          share_code: d.share_code || Math.random().toString(36).substring(2, 10),
+        };
+        return updatedDeck;
+      }
+      return d;
+    });
+    window.localStorage.setItem(STORAGE_KEYS.DECKS, JSON.stringify(updated));
+    memoryCachedDecks = updated;
+  }
+  return updatedDeck;
+}
+
+/**
+ * Get single deck with its cards (for preview & sharing)
+ */
+export async function getDeckWithCards(
+  deckIdOrCode: string
+): Promise<{ deck: Deck; cards: Card[] } | null> {
+  const allDecks = await getDecks();
+  const deck = allDecks.find(
+    (d) => d.id === deckIdOrCode || d.share_code === deckIdOrCode
+  );
+  if (!deck) return null;
+
+  const cards = await getCards(deck.id);
+  return { deck, cards };
 }
 
 /**
