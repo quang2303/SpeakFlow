@@ -79,7 +79,7 @@ export default function TopHeaderBar() {
     router.push("/login");
   }
 
-  const displayName = user?.full_name || "Quang Đức";
+  const displayName = user?.full_name || (user?.email ? user.email.split("@")[0] : "Học viên");
 
   return (
     <header className="sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-slate-200/80 px-4 md:px-8 py-3">

@@ -94,7 +94,7 @@ export default function BottomNav() {
     router.push("/login");
   }
 
-  const displayName = user?.full_name || "Quang Đức";
+  const displayName = user?.full_name || (user?.email ? user.email.split("@")[0] : "Học viên");
 
   return (
     <>
@@ -243,43 +243,34 @@ export default function BottomNav() {
               </div>
             ) : (
               <div
-                className={`flex items-center gap-2 p-2 rounded-2xl bg-slate-50 border border-slate-200/80 ${
+                className={`flex items-center gap-2 p-2 rounded-2xl bg-brand-50/70 border border-brand-200/60 ${
                   collapsed ? "justify-center p-2" : ""
                 }`}
               >
                 <Link
-                  href="/profile"
-                  className="flex items-center gap-3 min-w-0 flex-1 group"
-                  title="Xem thông tin học viên"
+                  href="/login"
+                  className={`flex items-center gap-3 min-w-0 flex-1 group ${
+                    collapsed ? "justify-center" : ""
+                  }`}
+                  title="Đăng nhập tài khoản"
                 >
-                  <div className="w-9 h-9 rounded-xl bg-brand-100 text-brand-700 flex items-center justify-center font-bold text-xs shrink-0 group-hover:bg-brand-200 transition-colors">
-                    QĐ
+                  <div className="w-9 h-9 rounded-xl bg-brand-500 text-white flex items-center justify-center font-bold text-xs shrink-0 group-hover:bg-brand-600 shadow-xs transition-colors">
+                    <LogIn className="w-4 h-4" />
                   </div>
 
                   {!collapsed && (
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-semibold text-slate-900 truncate leading-tight group-hover:text-brand-600 transition-colors">
-                        Quang Đức
+                        Đăng nhập
                       </p>
                       <div className="flex items-center gap-1.5 mt-0.5">
-                        <span className="w-1.5 h-1.5 rounded-full bg-brand-500 shrink-0" />
-                        <span className="text-xs text-slate-500 font-medium">
-                          Học viên
+                        <span className="text-xs text-slate-500 font-medium truncate">
+                          Đồng bộ tiến trình
                         </span>
                       </div>
                     </div>
                   )}
                 </Link>
-
-                {!collapsed && (
-                  <Link
-                    href="/login"
-                    className="p-1.5 rounded-lg text-brand-600 hover:bg-brand-50 transition-colors shrink-0"
-                    title="Đăng nhập tài khoản"
-                  >
-                    <LogIn className="w-4 h-4" />
-                  </Link>
-                )}
               </div>
             )}
           </div>

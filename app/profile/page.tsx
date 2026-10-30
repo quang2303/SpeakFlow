@@ -28,6 +28,7 @@ import {
   Settings,
   AlertTriangle,
   RotateCcw,
+  User as UserIcon,
 } from "lucide-react";
 import {
   getCurrentUser,
@@ -72,7 +73,7 @@ export default function ProfilePage() {
   const loadData = useCallback(async () => {
     const cachedUser = getStoredUserProfile();
     setUser(cachedUser);
-    setNameInput(cachedUser?.full_name || "Quang Đức");
+    setNameInput(cachedUser?.full_name || (cachedUser?.email ? cachedUser.email.split("@")[0] : "Học viên"));
 
     const m = getStudentProfileMetrics(cachedUser?.id);
     setMetrics(m);
@@ -81,7 +82,7 @@ export default function ProfilePage() {
     const freshUser = await getCurrentUser();
     if (freshUser) {
       setUser(freshUser);
-      setNameInput(freshUser.full_name || "Quang Đức");
+      setNameInput(freshUser.full_name || (freshUser.email ? freshUser.email.split("@")[0] : "Học viên"));
       const freshMetrics = getStudentProfileMetrics(freshUser.id);
       setMetrics(freshMetrics);
     }
@@ -202,8 +203,8 @@ export default function ProfilePage() {
     router.push("/login");
   }
 
-  const displayName = user?.full_name || "Quang Đức";
-  const email = user?.email || "chungducquang2@gmail.com";
+  const displayName = user?.full_name || (user?.email ? user.email.split("@")[0] : "Học viên (Chưa đăng nhập)");
+  const email = user?.email || "Chưa liên kết tài khoản Google";
   const streak = metrics?.streak ?? getStreakData().currentStreak;
   const masteredCount = metrics?.masteredCount ?? 0;
   const totalCards = metrics?.totalCards ?? 100;
@@ -265,8 +266,8 @@ export default function ProfilePage() {
                 showOnlineDot={user.status !== "locked"}
               />
             ) : (
-              <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl bg-brand-500 text-white flex items-center justify-center text-3xl font-bold shadow-md shadow-brand-500/15">
-                QĐ
+              <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl bg-slate-100 border border-slate-200 text-slate-400 flex items-center justify-center text-3xl font-bold shadow-xs">
+                <UserIcon className="w-10 h-10 text-slate-400" />
               </div>
             )}
             <div

@@ -98,14 +98,14 @@ export default function HomePage() {
     (c) => c.box >= 3 || c.interval_days >= 3
   );
 
-  const displayName = user?.full_name || "Quang Đức";
+  const displayName = user?.full_name || (user?.email ? user.email.split("@")[0] : null);
 
   return (
     <div className="px-4 sm:px-6 lg:px-8 py-6 space-y-7 max-w-5xl mx-auto">
       {/* ================= A. LỜI CHÀO ================= */}
       <div className="space-y-1">
         <h1 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight">
-          Xin chào, {displayName}!
+          {displayName ? `Xin chào, ${displayName}!` : "Xin chào bạn!"}
         </h1>
         <p className="text-slate-500 text-sm md:text-base">
           {dueCards.length > 0
