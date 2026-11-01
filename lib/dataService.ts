@@ -1,6 +1,7 @@
 import { createClient, SupabaseClient, User } from "@supabase/supabase-js";
 import {
   Card,
+  CEFRLevel,
   Deck,
   SEED_CARDS,
   SEED_DECKS,
@@ -12,7 +13,8 @@ import { calculateNextSRS, isCardDue, SRSRating } from "./srs";
 
 const STORAGE_KEYS = {
   DECKS: "speakflow_decks_v1",
-  CARDS: "speakflow_cards_v1",
+  CARDS: "speakflow_cards_v2",
+  CARDS_V1: "speakflow_cards_v1",
   STREAK: "speakflow_streak_v1",
   FORCE_LOCAL: "speakflow_force_local_v1",
   USER_PROFILE: "speakflow_user_profile_v1",
@@ -679,6 +681,7 @@ function saveStoredUserProfile(
   notify = true
 ): void {
   if (typeof window === "undefined") return;
+  invalidateMemorySeedCache();
   if (!profile) {
     window.localStorage.removeItem(STORAGE_KEYS.USER_PROFILE);
     if (notify) {
@@ -2528,6 +2531,7 @@ function ensureLocalSeed(): { decks: Deck[]; cards: Card[] } {
       const seedDeckMap = new Map(SEED_DECKS.map((d) => [d.id, d]));
       let decksChanged = false;
       decks = decks.map((d) => {
+        const isSys = isSystemDeck(d.id);
         const seedDeck = seedDeckMap.get(d.id);
         if (
           seedDeck &&
@@ -2536,9 +2540,20 @@ function ensureLocalSeed(): { decks: Deck[]; cards: Card[] } {
           decksChanged = true;
           return {
             ...d,
+            is_system: true,
+            is_public: true,
             title: seedDeck.title,
             description: seedDeck.description,
             icon: seedDeck.icon,
+          };
+        }
+        if (!isSys && (!d.user_id || d.is_system)) {
+          decksChanged = true;
+          return {
+            ...d,
+            is_system: false,
+            is_public: Boolean(d.is_public),
+            user_id: d.user_id || "local_guest",
           };
         }
         return d;
@@ -2560,13 +2575,44 @@ function ensureLocalSeed(): { decks: Deck[]; cards: Card[] } {
   }
 
   try {
-    const rawCards = window.localStorage.getItem(STORAGE_KEYS.CARDS);
+    let rawCards = window.localStorage.getItem(STORAGE_KEYS.CARDS);
+    let parsedCards: Card[] | null = null;
     if (rawCards) {
-      const parsedCards = JSON.parse(rawCards);
-      if (Array.isArray(parsedCards)) {
-        cards = parsedCards.filter((c) => c && typeof c === "object" && Boolean(c.id));
+      try {
+        const parsed = JSON.parse(rawCards);
+        if (Array.isArray(parsed)) parsedCards = parsed;
+      } catch {
+        // ignore
       }
     }
+
+    // Seamless migration: if v2 cache doesn't exist yet, migrate from v1 cache preserving user SRS progress
+    if (!parsedCards || parsedCards.length === 0) {
+      const rawV1 = window.localStorage.getItem(STORAGE_KEYS.CARDS_V1);
+      if (rawV1) {
+        try {
+          const parsedV1 = JSON.parse(rawV1);
+          if (Array.isArray(parsedV1) && parsedV1.length > 0) {
+            const seedCardMap = new Map(SEED_CARDS.map((c) => [c.id, c]));
+            parsedCards = parsedV1.map((c: any) => {
+              const sc = seedCardMap.get(c.id);
+              return {
+                ...c,
+                level: (c.level || sc?.level || "B1") as CEFRLevel,
+                variations: c.variations || sc?.variations || [],
+              };
+            });
+          }
+        } catch {
+          // ignore v1 parse error
+        }
+      }
+    }
+
+    if (parsedCards && Array.isArray(parsedCards)) {
+      cards = parsedCards.filter((c) => c && typeof c === "object" && Boolean(c.id));
+    }
+
     if (!Array.isArray(cards) || cards.length === 0) {
       cards = SEED_CARDS;
       window.localStorage.setItem(STORAGE_KEYS.CARDS, JSON.stringify(cards));
@@ -2579,7 +2625,7 @@ function ensureLocalSeed(): { decks: Deck[]; cards: Card[] } {
       let cardsChanged = false;
       cards = cards.map((c) => {
         const sc = seedCardMap.get(c.id);
-        if (sc && (!c.variations || c.variations.length === 0 || c.phrase_en !== sc.phrase_en)) {
+        if (sc && (!c.variations || c.variations.length === 0 || c.phrase_en !== sc.phrase_en || !c.level || c.level !== sc.level)) {
           cardsChanged = true;
           return {
             ...c,
@@ -2590,6 +2636,14 @@ function ensureLocalSeed(): { decks: Deck[]; cards: Card[] } {
             sentence_vi: sc.sentence_vi,
             context_note: sc.context_note,
             variations: sc.variations,
+            level: sc.level,
+          };
+        }
+        if (!c.level) {
+          cardsChanged = true;
+          return {
+            ...c,
+            level: "B1" as CEFRLevel,
           };
         }
         return c;
@@ -2612,10 +2666,136 @@ function ensureLocalSeed(): { decks: Deck[]; cards: Card[] } {
   return { decks, cards };
 }
 
+export const SF_META_PREFIX = "__SF_META__:";
+
+export interface DeckSupabaseMeta {
+  user_id?: string | null;
+  is_system?: boolean;
+  is_public?: boolean;
+  share_code?: string;
+  author_name?: string | null;
+  cloned_from_id?: string | null;
+  clone_count?: number;
+}
+
+export function parseDeckMeta(rawDescription: string): {
+  cleanDescription: string;
+  meta: DeckSupabaseMeta | null;
+} {
+  if (!rawDescription || !rawDescription.startsWith(SF_META_PREFIX)) {
+    return { cleanDescription: rawDescription || "", meta: null };
+  }
+  const newlineIdx = rawDescription.indexOf("\n");
+  const metaJson =
+    newlineIdx !== -1
+      ? rawDescription.slice(SF_META_PREFIX.length, newlineIdx).trim()
+      : rawDescription.slice(SF_META_PREFIX.length).trim();
+  const cleanDescription =
+    newlineIdx !== -1 ? rawDescription.slice(newlineIdx + 1) : "";
+  try {
+    const meta = JSON.parse(metaJson);
+    return { cleanDescription, meta };
+  } catch {
+    return { cleanDescription: rawDescription, meta: null };
+  }
+}
+
+export function packDeckMetaIntoDescription(
+  description: string,
+  deck: Partial<Deck>
+): string {
+  const meta: DeckSupabaseMeta = {
+    user_id: deck.user_id === "local_guest" ? null : deck.user_id ?? null,
+    is_system: Boolean(deck.is_system),
+    is_public: Boolean(deck.is_public),
+    share_code: deck.share_code,
+    author_name: deck.author_name ?? null,
+    cloned_from_id: deck.cloned_from_id ?? null,
+    clone_count: deck.clone_count ?? 0,
+  };
+  return `${SF_META_PREFIX}${JSON.stringify(meta)}\n${description || ""}`;
+}
+
+export function filterVisibleDecks(
+  decks: Deck[],
+  activeUser: UserProfile | null
+): Deck[] {
+  return decks.filter((deck) => {
+    // 1. System decks are always visible to everyone
+    if (deck.is_system || isSystemDeck(deck.id)) {
+      return true;
+    }
+    // 2. Public shared decks are visible to everyone
+    if (deck.is_public) {
+      return true;
+    }
+    // 3. User's own custom private decks (must match active user ID)
+    if (activeUser?.id && deck.user_id === activeUser.id) {
+      return true;
+    }
+    // 4. Local guest decks on this browser only if user is logged out
+    if (!activeUser && deck.user_id === "local_guest") {
+      return true;
+    }
+    return false;
+  });
+}
+
+export async function syncDeckToSupabase(deck: Deck): Promise<void> {
+  const supabase = getSupabaseClient();
+  if (!supabase) return;
+
+  const descriptionWithMeta = packDeckMetaIntoDescription(
+    deck.description,
+    deck
+  );
+
+  const fullPayload: Record<string, any> = {
+    id: deck.id,
+    title: deck.title,
+    description: descriptionWithMeta,
+    icon: deck.icon,
+    created_at: deck.created_at,
+    user_id: deck.user_id === "local_guest" ? null : deck.user_id,
+    is_system: Boolean(deck.is_system),
+    is_public: Boolean(deck.is_public),
+    share_code: deck.share_code || null,
+    author_name: deck.author_name || null,
+    cloned_from_id: deck.cloned_from_id || null,
+    clone_count: deck.clone_count || 0,
+  };
+
+  try {
+    const { error } = await supabase
+      .from("decks")
+      .upsert([fullPayload], { onConflict: "id" });
+    if (!error) return;
+
+    // If column doesn't exist (error 42703), fall back to safe base payload with packed meta
+    const safePayload = {
+      id: deck.id,
+      title: deck.title,
+      description: descriptionWithMeta,
+      icon: deck.icon,
+      created_at: deck.created_at,
+    };
+    await supabase
+      .from("decks")
+      .upsert([safePayload], { onConflict: "id" });
+  } catch {
+    // Fallback ignored
+  }
+}
+
 /**
- * Fetch all decks (from Supabase with seamless fallback to localStorage)
+ * Fetch all decks (from Supabase with seamless fallback to localStorage),
+ * strictly filtered by ownership and privacy visibility rules.
  */
-export async function getDecks(): Promise<Deck[]> {
+export async function getDecks(userOverride?: UserProfile | null): Promise<Deck[]> {
+  const activeUser =
+    userOverride !== undefined ? userOverride : getStoredUserProfile();
+  let baseDecks: Deck[] = [];
+
   const supabase = getSupabaseClient();
   if (supabase) {
     try {
@@ -2626,38 +2806,47 @@ export async function getDecks(): Promise<Deck[]> {
 
       if (!error && data) {
         const seedDeckMap = new Map(SEED_DECKS.map((d) => [d.id, d]));
-        let baseDecks: Deck[] = data.map((d: any) => {
+        baseDecks = data.map((d: any) => {
           const sd = seedDeckMap.get(d.id);
-          const isSys = isSystemDeck(d.id);
+          const { cleanDescription, meta } = parseDeckMeta(d.description || "");
+          const isSys =
+            isSystemDeck(d.id) || Boolean(d.is_system ?? meta?.is_system);
           return {
             ...d,
             is_system: isSys,
-            is_public: isSys ? true : Boolean(d.is_public),
+            is_public: isSys ? true : Boolean(d.is_public ?? meta?.is_public),
             title: sd?.title || d.title,
-            description: sd?.description || d.description,
+            description: sd?.description || cleanDescription,
             icon: sd?.icon || d.icon,
+            user_id: d.user_id ?? meta?.user_id ?? null,
+            share_code: d.share_code || meta?.share_code,
+            author_name:
+              d.author_name || meta?.author_name || (isSys ? "SpeakFlow" : "Học viên"),
+            cloned_from_id: d.cloned_from_id || meta?.cloned_from_id || null,
+            clone_count: d.clone_count ?? meta?.clone_count ?? 0,
           };
         });
-
-        if (typeof window !== "undefined") {
-          const { decks: localDecks } = ensureLocalSeed();
-          const dbIds = new Set(baseDecks.map((d) => d.id));
-          const extraLocal = localDecks.filter((ld) => !dbIds.has(ld.id));
-          if (extraLocal.length > 0) {
-            baseDecks = [...baseDecks, ...extraLocal];
-          }
-        }
-
-        if (baseDecks.length > 0) {
-          return baseDecks;
-        }
       }
     } catch {
       // Fallback to local
     }
   }
 
-  return ensureLocalSeed().decks;
+  if (typeof window !== "undefined") {
+    const { decks: localDecks } = ensureLocalSeed();
+    const dbIds = new Set(baseDecks.map((d) => d.id));
+    const extraLocal = localDecks.filter((ld) => !dbIds.has(ld.id));
+    if (extraLocal.length > 0) {
+      baseDecks = [...baseDecks, ...extraLocal];
+    }
+  }
+
+  if (baseDecks.length === 0) {
+    baseDecks = ensureLocalSeed().decks;
+  }
+
+  // Strictly filter decks based on privacy & active user
+  return filterVisibleDecks(baseDecks, activeUser);
 }
 
 /**
@@ -2665,17 +2854,29 @@ export async function getDecks(): Promise<Deck[]> {
  */
 function sanitizeCardForSupabase(card: Card | Record<string, any>): Record<string, any> {
   const { variations, ...rest } = card as Card & { variations?: string[] };
-  return rest;
+  return {
+    ...rest,
+    level: rest.level || "B1",
+  };
 }
 
 /**
- * Fetch all cards (optionally filtered by deck_id) + merge logged-in Google user's personal SRS progress
+ * Fetch all cards (optionally filtered by deck_id and CEFR level) + merge logged-in Google user's personal SRS progress
  */
-export async function getCards(deckId?: string): Promise<Card[]> {
+export async function getCards(deckId?: string, level?: string): Promise<Card[]> {
   const activeUser = getStoredUserProfile() || (await getCurrentUser());
   if (activeUser?.provider === "demo") {
     const { cards } = ensureLocalSeed();
-    return deckId ? cards.filter((c) => c.deck_id === deckId) : cards;
+    const visibleDecks = await getDecks(activeUser);
+    const visibleDeckIds = new Set(visibleDecks.map((d) => d.id));
+    let visibleCards = cards.filter((c) => visibleDeckIds.has(c.deck_id));
+    if (deckId && deckId !== "all") {
+      visibleCards = visibleCards.filter((c) => c.deck_id === deckId);
+    }
+    if (level && level !== "all") {
+      visibleCards = visibleCards.filter((c) => (c.level || "B1") === level);
+    }
+    return visibleCards;
   }
 
   const supabase = getSupabaseClient();
@@ -2683,8 +2884,11 @@ export async function getCards(deckId?: string): Promise<Card[]> {
   if (supabase) {
     try {
       let query = supabase.from("cards").select("*");
-      if (deckId) {
+      if (deckId && deckId !== "all") {
         query = query.eq("deck_id", deckId);
+      }
+      if (level && level !== "all") {
+        query = query.eq("level", level);
       }
       const { data, error } = await query;
       if (!error && data) {
@@ -2705,7 +2909,7 @@ export async function getCards(deckId?: string): Promise<Card[]> {
               baseCards = [...baseCards, ...(insertedCards as Card[])];
             }
           }
-        } else if (deckId) {
+        } else if (deckId && deckId !== "all") {
           const expectedSeedForDeck = SEED_CARDS.filter(
             (sc) => sc.deck_id === deckId
           );
@@ -2727,12 +2931,13 @@ export async function getCards(deckId?: string): Promise<Card[]> {
           }
         }
 
-        // Always attach variations from seed map if missing from DB schema
+        // Always attach variations and level from seed map if missing from DB schema
         const seedCardMap = new Map(SEED_CARDS.map((c) => [c.id, c]));
         baseCards = baseCards.map((card) => {
           const sc = seedCardMap.get(card.id);
           return {
             ...card,
+            level: (card.level || sc?.level || "B1") as CEFRLevel,
             variations:
               card.variations && card.variations.length > 0
                 ? card.variations
@@ -2775,7 +2980,7 @@ export async function getCards(deckId?: string): Promise<Card[]> {
           }
         }
 
-        if (!deckId && typeof window !== "undefined" && baseCards.length > 0) {
+        if (!deckId && (!level || level === "all") && typeof window !== "undefined" && baseCards.length > 0) {
           window.localStorage.setItem(
             STORAGE_KEYS.CARDS,
             JSON.stringify(baseCards)
@@ -2783,9 +2988,16 @@ export async function getCards(deckId?: string): Promise<Card[]> {
           memoryCachedCards = baseCards;
         }
 
-        if (baseCards.length > 0) {
-          return baseCards;
+        // Filter cards so cards from private decks of other users are never returned
+        const visibleDecks = await getDecks(activeUser);
+        const visibleDeckIds = new Set(visibleDecks.map((d) => d.id));
+        baseCards = baseCards.filter((c) => visibleDeckIds.has(c.deck_id));
+
+        if (level && level !== "all") {
+          baseCards = baseCards.filter((c) => (c.level || "B1") === level);
         }
+
+        return baseCards;
       }
     } catch {
       // Fallback to local
@@ -2793,10 +3005,16 @@ export async function getCards(deckId?: string): Promise<Card[]> {
   }
 
   const { cards } = ensureLocalSeed();
-  if (deckId) {
-    return cards.filter((c) => c.deck_id === deckId);
+  const visibleDecks = await getDecks(activeUser);
+  const visibleDeckIds = new Set(visibleDecks.map((d) => d.id));
+  let visibleCards = cards.filter((c) => visibleDeckIds.has(c.deck_id));
+  if (deckId && deckId !== "all") {
+    visibleCards = visibleCards.filter((c) => c.deck_id === deckId);
   }
-  return cards;
+  if (level && level !== "all") {
+    visibleCards = visibleCards.filter((c) => (c.level || "B1") === level);
+  }
+  return visibleCards;
 }
 
 /**
@@ -3005,12 +3223,13 @@ export async function addCard(
     | "ease_factor"
     | "next_review_at"
     | "last_practiced_at"
-  >
+  > & { level?: CEFRLevel }
 ): Promise<Card> {
   const nowIso = new Date().toISOString();
   const activeUser = getStoredUserProfile();
   const newCard: Card = {
     ...newCardInput,
+    level: (newCardInput.level || "B1") as CEFRLevel,
     variations: newCardInput.variations || [],
     user_id: activeUser ? activeUser.id : null,
     id:
@@ -3065,6 +3284,7 @@ export async function importCardsBatch(
     sentence_en: string;
     sentence_vi: string;
     context_note?: string;
+    level?: CEFRLevel;
   }>,
   defaultDeckId: string
 ): Promise<Card[]> {
@@ -3086,6 +3306,7 @@ export async function importCardsBatch(
         item.context_note?.trim() ||
         "Cụm từ tự thêm để luyện phản xạ giao tiếp.",
       variations: (item as { variations?: string[] }).variations || [],
+      level: ((item.level as CEFRLevel) || "B1"),
       box: 1,
       interval_days: 0,
       ease_factor: 2.5,
@@ -3186,11 +3407,11 @@ export async function createCustomDeck(params: {
     description: (params.description || "").trim(),
     icon: params.icon || "BookOpen",
     created_at: nowIso,
-    user_id: activeUser ? activeUser.id : null,
+    user_id: activeUser ? activeUser.id : "local_guest",
     is_system: false,
     is_public: Boolean(params.is_public),
     share_code: shareCode,
-    author_name: activeUser?.full_name || "Học viên",
+    author_name: activeUser?.full_name || (activeUser ? "Học viên" : "Khách"),
     clone_count: 0,
   };
 
@@ -3201,23 +3422,9 @@ export async function createCustomDeck(params: {
     memoryCachedDecks = updated;
   }
 
-  const supabase = getSupabaseClient();
-  if (supabase) {
-    try {
-      const {
-        user_id,
-        is_system,
-        is_public,
-        share_code,
-        cloned_from_id,
-        clone_count,
-        author_name,
-        ...basePayload
-      } = newDeck;
-      await supabase.from("decks").insert([basePayload]);
-    } catch {
-      // Fallback already saved locally
-    }
+  // Only sync to cloud if user is logged in (guest decks stay strictly local)
+  if (activeUser) {
+    await syncDeckToSupabase(newDeck);
   }
 
   return newDeck;
@@ -3236,8 +3443,24 @@ export async function deleteCustomDeck(
     };
   }
 
+  const activeUser = getStoredUserProfile();
   if (typeof window !== "undefined") {
     const { decks, cards } = ensureLocalSeed();
+    const target = decks.find((d) => d.id === deckId);
+    if (
+      target &&
+      activeUser &&
+      target.user_id &&
+      target.user_id !== "local_guest" &&
+      target.user_id !== activeUser.id &&
+      activeUser.role !== "admin"
+    ) {
+      return {
+        success: false,
+        message: "Bạn không có quyền xóa bộ thẻ của người khác!",
+      };
+    }
+
     const updatedDecks = decks.filter((d) => d.id !== deckId);
     const updatedCards = cards.filter((c) => c.deck_id !== deckId);
     window.localStorage.setItem(STORAGE_KEYS.DECKS, JSON.stringify(updatedDecks));
@@ -3270,9 +3493,22 @@ export async function updateCustomDeck(
     return null;
   }
 
+  const activeUser = getStoredUserProfile();
   let updatedDeck: Deck | null = null;
   if (typeof window !== "undefined") {
     const { decks } = ensureLocalSeed();
+    const target = decks.find((d) => d.id === deckId);
+    if (
+      target &&
+      activeUser &&
+      target.user_id &&
+      target.user_id !== "local_guest" &&
+      target.user_id !== activeUser.id &&
+      activeUser.role !== "admin"
+    ) {
+      return null;
+    }
+
     const updated = decks.map((d) => {
       if (d.id === deckId) {
         updatedDeck = { ...d, ...updates };
@@ -3284,24 +3520,8 @@ export async function updateCustomDeck(
     memoryCachedDecks = updated;
   }
 
-  const supabase = getSupabaseClient();
-  if (supabase && updatedDeck) {
-    try {
-      const current = updatedDeck as Deck;
-      const {
-        user_id,
-        is_system,
-        is_public,
-        share_code,
-        cloned_from_id,
-        clone_count,
-        author_name,
-        ...basePayload
-      } = current;
-      await supabase.from("decks").update(basePayload).eq("id", deckId);
-    } catch {
-      // ignore
-    }
+  if (updatedDeck && activeUser) {
+    await syncDeckToSupabase(updatedDeck);
   }
 
   return updatedDeck;
@@ -3337,12 +3557,12 @@ export async function cloneDeckToMyLibrary(
       sourceDeck.description || `Được sao chép từ ${sourceDeck.title}`,
     icon: sourceDeck.icon || "BookOpen",
     created_at: nowIso,
-    user_id: activeUser ? activeUser.id : null,
+    user_id: activeUser ? activeUser.id : "local_guest",
     is_system: false,
     is_public: false,
     share_code: shareCode,
     cloned_from_id: sourceDeck.id,
-    author_name: activeUser?.full_name || "Học viên",
+    author_name: activeUser?.full_name || (activeUser ? "Học viên" : "Khách"),
     clone_count: 0,
   };
 
@@ -3371,24 +3591,16 @@ export async function cloneDeckToMyLibrary(
     memoryCachedCards = updatedCards;
   }
 
-  const supabase = getSupabaseClient();
-  if (supabase) {
-    try {
-      const {
-        user_id,
-        is_system,
-        is_public,
-        share_code,
-        cloned_from_id,
-        clone_count,
-        author_name,
-        ...baseDeck
-      } = clonedDeck;
-      await supabase.from("decks").insert([baseDeck]);
-      const sanitized = clonedCards.map((c) => sanitizeCardForSupabase(c));
-      await supabase.from("cards").insert(sanitized);
-    } catch {
-      // fallback
+  if (activeUser) {
+    await syncDeckToSupabase(clonedDeck);
+    const supabase = getSupabaseClient();
+    if (supabase) {
+      try {
+        const sanitized = clonedCards.map((c) => sanitizeCardForSupabase(c));
+        await supabase.from("cards").insert(sanitized);
+      } catch {
+        // fallback
+      }
     }
   }
 
@@ -3403,16 +3615,30 @@ export async function toggleDeckSharing(
   isPublic: boolean
 ): Promise<Deck | null> {
   if (isSystemDeck(deckId)) return null;
+  const activeUser = getStoredUserProfile();
 
   let updatedDeck: Deck | null = null;
   if (typeof window !== "undefined") {
     const { decks } = ensureLocalSeed();
+    const target = decks.find((d) => d.id === deckId);
+    if (
+      target &&
+      activeUser &&
+      target.user_id &&
+      target.user_id !== "local_guest" &&
+      target.user_id !== activeUser.id &&
+      activeUser.role !== "admin"
+    ) {
+      return null;
+    }
+
     const updated = decks.map((d) => {
       if (d.id === deckId) {
         updatedDeck = {
           ...d,
           is_public: isPublic,
-          share_code: d.share_code || Math.random().toString(36).substring(2, 10),
+          share_code:
+            d.share_code || Math.random().toString(36).substring(2, 10),
         };
         return updatedDeck;
       }
@@ -3421,6 +3647,11 @@ export async function toggleDeckSharing(
     window.localStorage.setItem(STORAGE_KEYS.DECKS, JSON.stringify(updated));
     memoryCachedDecks = updated;
   }
+
+  if (updatedDeck && activeUser) {
+    await syncDeckToSupabase(updatedDeck);
+  }
+
   return updatedDeck;
 }
 
@@ -3430,14 +3661,59 @@ export async function toggleDeckSharing(
 export async function getDeckWithCards(
   deckIdOrCode: string
 ): Promise<{ deck: Deck; cards: Card[] } | null> {
-  const allDecks = await getDecks();
-  const deck = allDecks.find(
-    (d) => d.id === deckIdOrCode || d.share_code === deckIdOrCode
-  );
-  if (!deck) return null;
+  const activeUser = getStoredUserProfile();
+  const supabase = getSupabaseClient();
+  let targetDeck: Deck | null = null;
 
-  const cards = await getCards(deck.id);
-  return { deck, cards };
+  if (supabase) {
+    try {
+      const { data } = await supabase
+        .from("decks")
+        .select("*")
+        .or(`id.eq.${deckIdOrCode},share_code.eq.${deckIdOrCode}`);
+      if (data && data.length > 0) {
+        const raw = data[0];
+        const { cleanDescription, meta } = parseDeckMeta(raw.description || "");
+        const isSys =
+          isSystemDeck(raw.id) || Boolean(raw.is_system ?? meta?.is_system);
+        targetDeck = {
+          ...raw,
+          is_system: isSys,
+          is_public: isSys ? true : Boolean(raw.is_public ?? meta?.is_public),
+          description: cleanDescription,
+          user_id: raw.user_id ?? meta?.user_id ?? null,
+          share_code: raw.share_code || meta?.share_code,
+          author_name:
+            raw.author_name || meta?.author_name || (isSys ? "SpeakFlow" : "Học viên"),
+          cloned_from_id: raw.cloned_from_id || meta?.cloned_from_id || null,
+          clone_count: raw.clone_count ?? meta?.clone_count ?? 0,
+        };
+      }
+    } catch {
+      // fallback
+    }
+  }
+
+  if (!targetDeck && typeof window !== "undefined") {
+    const { decks: localDecks } = ensureLocalSeed();
+    targetDeck =
+      localDecks.find(
+        (d) => d.id === deckIdOrCode || d.share_code === deckIdOrCode
+      ) || null;
+  }
+
+  if (!targetDeck) return null;
+
+  // Strict privacy protection:
+  // If not system and not public, ONLY the owner can view this deck
+  if (!targetDeck.is_system && !targetDeck.is_public) {
+    if (!activeUser?.id || targetDeck.user_id !== activeUser.id) {
+      return null;
+    }
+  }
+
+  const cards = await getCards(targetDeck.id);
+  return { deck: targetDeck, cards };
 }
 
 /**

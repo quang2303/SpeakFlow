@@ -17,7 +17,7 @@ import {
   Lock,
   Globe,
 } from "lucide-react";
-import { createCustomDeck } from "@/lib/dataService";
+import { createCustomDeck, getStoredUserProfile } from "@/lib/dataService";
 import { Deck } from "@/lib/seedData";
 
 const AVAILABLE_ICONS = [
@@ -109,6 +109,12 @@ export default function CreateDeckModal({
 
         {/* Form Body */}
         <form onSubmit={handleSubmit} className="p-6 space-y-5">
+          {!getStoredUserProfile() && (
+            <div className="p-3 rounded-2xl bg-amber-50 border border-amber-200/80 text-amber-800 text-xs">
+              <span className="font-bold">Lưu ý:</span> Bạn đang tạo bộ thẻ ở chế độ Cục bộ (Local). Hãy đăng nhập tài khoản để lưu trữ an toàn trên Supabase Cloud và đồng bộ dữ liệu.
+            </div>
+          )}
+
           {error && (
             <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs font-semibold text-rose-700">
               {error}

@@ -45,6 +45,7 @@ const DECKS = [
 const CARDS_DECK_1 = [
   {
     id: "10000000-0000-4000-8000-000000000001",
+    level: "B1",
     phrase_en: "catch up on",
     ipa: "/kætʃ ʌp ɑːn/",
     meaning_vi: "bắt kịp tiến độ / làm bù việc tồn đọng",
@@ -58,6 +59,7 @@ const CARDS_DECK_1 = [
   },
   {
     id: "10000000-0000-4000-8000-000000000002",
+    level: "B1",
     phrase_en: "run behind schedule",
     ipa: "/rʌn bɪˈhaɪnd ˈskedʒuːl/",
     meaning_vi: "bị trễ hạn / chậm so với tiến độ dự kiến",
@@ -71,6 +73,7 @@ const CARDS_DECK_1 = [
   },
   {
     id: "10000000-0000-4000-8000-000000000003",
+    level: "B2",
     phrase_en: "touch base with",
     ipa: "/tʌtʃ beɪs wɪð/",
     meaning_vi: "trao đổi nhanh / liên hệ cập nhật tình hình",
@@ -84,6 +87,7 @@ const CARDS_DECK_1 = [
   },
   {
     id: "10000000-0000-4000-8000-000000000004",
+    level: "C1",
     phrase_en: "bring to the table",
     ipa: "/brɪŋ tuː ðə ˈteɪbl/",
     meaning_vi: "đóng góp giá trị / mang lại lợi thế độc đáo",
@@ -97,6 +101,7 @@ const CARDS_DECK_1 = [
   },
   {
     id: "10000000-0000-4000-8000-000000000005",
+    level: "B2",
     phrase_en: "look into the matter",
     ipa: "/lʊk ˈɪntuː ðə ˈmætər/",
     meaning_vi: "kiểm tra / xem xét kỹ vấn đề",
@@ -110,6 +115,7 @@ const CARDS_DECK_1 = [
   },
   {
     id: "10000000-0000-4000-8000-000000000006",
+    level: "B2",
     phrase_en: "keep everyone in the loop",
     ipa: "/kiːp ˈevriwʌn ɪn ðə luːp/",
     meaning_vi: "cập nhật liên tục cho mọi người / không để ai bị thiếu thông tin",
@@ -123,6 +129,7 @@ const CARDS_DECK_1 = [
   },
   {
     id: "10000000-0000-4000-8000-000000000007",
+    level: "B1",
     phrase_en: "on the same page",
     ipa: "/ɑːn ðə seɪm peɪdʒ/",
     meaning_vi: "thống nhất quan điểm / hiểu cùng một hướng",
@@ -136,6 +143,7 @@ const CARDS_DECK_1 = [
   },
   {
     id: "10000000-0000-4000-8000-000000000008",
+    level: "A1",
     phrase_en: "call it a day",
     ipa: "/kɔːl ɪt ə deɪ/",
     meaning_vi: "hôm nay dừng ở đây thôi / kết thúc ca làm",
@@ -149,6 +157,7 @@ const CARDS_DECK_1 = [
   },
   {
     id: "10000000-0000-4000-8000-000000000009",
+    level: "A2",
     phrase_en: "follow up on",
     ipa: "/ˈfɑːloʊ ʌp ɑːn/",
     meaning_vi: "theo dõi tiếp / hỏi lại tiến độ công việc đã bàn",
@@ -162,6 +171,7 @@ const CARDS_DECK_1 = [
   },
   {
     id: "10000000-0000-4000-8000-000000000010",
+    level: "A1",
     phrase_en: "tight schedule",
     ipa: "/taɪt ˈskedʒuːl/",
     meaning_vi: "lịch trình rất gấp / thời gian eo hẹp",
@@ -175,6 +185,7 @@ const CARDS_DECK_1 = [
   },
   {
     id: "10000000-0000-4000-8000-000000000011",
+    level: "A2",
     phrase_en: "wrap up the meeting",
     ipa: "/ræp ʌp ðə ˈmiːtɪŋ/",
     meaning_vi: "chốt lại cuộc họp / kết thúc phiên làm việc",
@@ -188,6 +199,7 @@ const CARDS_DECK_1 = [
   },
   {
     id: "10000000-0000-4000-8000-000000000012",
+    level: "C1",
     phrase_en: "get straight to the point",
     ipa: "/ɡet streɪt tuː ðə pɔɪnt/",
     meaning_vi: "đi thẳng vào vấn đề chính",
@@ -201,6 +213,7 @@ const CARDS_DECK_1 = [
   },
   {
     id: "10000000-0000-4000-8000-000000000013",
+    level: "C2",
     phrase_en: "play devil's advocate",
     ipa: "/pleɪ ˈdevlz ˈædvəkət/",
     meaning_vi: "đưa ra góc nhìn phản biện / lật ngược vấn đề",
@@ -214,6 +227,7 @@ const CARDS_DECK_1 = [
   },
   {
     id: "10000000-0000-4000-8000-000000000014",
+    level: "C1",
     phrase_en: "circle back to",
     ipa: "/ˈsɜːrkl bæk tuː/",
     meaning_vi: "quay lại thảo luận việc này sau",
@@ -227,6 +241,7 @@ const CARDS_DECK_1 = [
   },
   {
     id: "10000000-0000-4000-8000-000000000015",
+    level: "A2",
     phrase_en: "put on hold",
     ipa: "/pʊt ɑːn hoʊld/",
     meaning_vi: "tạm gác lại / hoãn thi hành",
@@ -240,6 +255,7 @@ const CARDS_DECK_1 = [
   },
   {
     id: "10000000-0000-4000-8000-000000000016",
+    level: "C2",
     phrase_en: "weigh the pros and cons",
     ipa: "/weɪ ðə proʊz ænd kɑːnz/",
     meaning_vi: "cân nhắc kỹ mặt lợi và mặt hại",
@@ -253,6 +269,7 @@ const CARDS_DECK_1 = [
   },
   {
     id: "10000000-0000-4000-8000-000000000017",
+    level: "C2",
     phrase_en: "reach a consensus",
     ipa: "/riːtʃ ə kənˈsensəs/",
     meaning_vi: "đạt được sự đồng thuận chung",
@@ -266,6 +283,7 @@ const CARDS_DECK_1 = [
   },
   {
     id: "10000000-0000-4000-8000-000000000018",
+    level: "A1",
     phrase_en: "action items",
     ipa: "/ˈækʃn ˈaɪtəmz/",
     meaning_vi: "các đầu việc cần triển khai ngay sau họp",
@@ -282,6 +300,7 @@ const CARDS_DECK_1 = [
 const CARDS_DECK_2 = [
   {
     id: "20000000-0000-4000-8000-000000000001",
+    level: "B1",
     phrase_en: "deploy to production",
     ipa: "/dɪˈplɔɪ tuː prəˈdʌkʃn/",
     meaning_vi: "đưa phần mềm lên môi trường thực tế (production)",
@@ -295,6 +314,7 @@ const CARDS_DECK_2 = [
   },
   {
     id: "20000000-0000-4000-8000-000000000002",
+    level: "A2",
     phrase_en: "fix a critical bug",
     ipa: "/fɪks ə ˈkrɪtɪkl bʌɡ/",
     meaning_vi: "sửa một lỗi hệ thống cực kỳ nghiêm trọng",
@@ -308,6 +328,7 @@ const CARDS_DECK_2 = [
   },
   {
     id: "20000000-0000-4000-8000-000000000003",
+    level: "A2",
     phrase_en: "check server logs",
     ipa: "/tʃek ˈsɜːrvər lɔːɡz/",
     meaning_vi: "kiểm tra nhật ký hoạt động của máy chủ",
@@ -321,6 +342,7 @@ const CARDS_DECK_2 = [
   },
   {
     id: "20000000-0000-4000-8000-000000000004",
+    level: "B2",
     phrase_en: "optimize performance",
     ipa: "/ˈɑːptɪmaɪz pərˈfɔːrməns/",
     meaning_vi: "tối ưu hóa hiệu năng và tốc độ xử lý",
@@ -334,6 +356,7 @@ const CARDS_DECK_2 = [
   },
   {
     id: "20000000-0000-4000-8000-000000000005",
+    level: "C1",
     phrase_en: "rollback the deployment",
     ipa: "/ˈroʊlbæk ðə dɪˈplɔɪmənt/",
     meaning_vi: "khôi phục lại phiên bản cũ khi bản mới gặp lỗi",
@@ -347,6 +370,7 @@ const CARDS_DECK_2 = [
   },
   {
     id: "20000000-0000-4000-8000-000000000006",
+    level: "B2",
     phrase_en: "run into a glitch",
     ipa: "/rʌn ˈɪntuː ə ɡlɪtʃ/",
     meaning_vi: "gặp sự cố gián đoạn nhỏ ngoài ý muốn",
@@ -360,6 +384,7 @@ const CARDS_DECK_2 = [
   },
   {
     id: "20000000-0000-4000-8000-000000000007",
+    level: "C1",
     phrase_en: "root cause",
     ipa: "/ruːt kɔːz/",
     meaning_vi: "nguyên nhân gốc rễ của sự cố",
@@ -373,6 +398,7 @@ const CARDS_DECK_2 = [
   },
   {
     id: "20000000-0000-4000-8000-000000000008",
+    level: "B1",
     phrase_en: "from scratch",
     ipa: "/frʌm skrætʃ/",
     meaning_vi: "làm lại từ đầu / từ con số không",
@@ -386,6 +412,7 @@ const CARDS_DECK_2 = [
   },
   {
     id: "20000000-0000-4000-8000-000000000009",
+    level: "C1",
     phrase_en: "bottleneck",
     ipa: "/ˈbɑːtlnek/",
     meaning_vi: "điểm nghẽn cổ chai / chỗ làm chậm toàn bộ hệ thống",
@@ -399,6 +426,7 @@ const CARDS_DECK_2 = [
   },
   {
     id: "20000000-0000-4000-8000-000000000010",
+    level: "B2",
     phrase_en: "high latency",
     ipa: "/haɪ ˈleɪtnsi/",
     meaning_vi: "độ trễ phản hồi cao / mạng phản hồi chậm",
@@ -412,6 +440,7 @@ const CARDS_DECK_2 = [
   },
   {
     id: "20000000-0000-4000-8000-000000000011",
+    level: "A1",
     phrase_en: "push the commit",
     ipa: "/pʊʃ ðə kəˈmɪt/",
     meaning_vi: "đẩy các thay đổi mã nguồn lên kho lưu trữ (Git)",
@@ -425,6 +454,7 @@ const CARDS_DECK_2 = [
   },
   {
     id: "20000000-0000-4000-8000-000000000012",
+    level: "C2",
     phrase_en: "single point of failure",
     ipa: "/ˈsɪŋɡl pɔɪnt əv ˈfeɪljər/",
     meaning_vi: "điểm yếu chí mạng đơn lẻ (hỏng là sập cả hệ thống)",
@@ -438,6 +468,7 @@ const CARDS_DECK_2 = [
   },
   {
     id: "20000000-0000-4000-8000-000000000013",
+    level: "C2",
     phrase_en: "seamless integration",
     ipa: "/ˈsiːmləs ˌɪntɪˈɡreɪʃn/",
     meaning_vi: "tích hợp liền mạch / hoạt động mượt mà không xung đột",
@@ -451,6 +482,7 @@ const CARDS_DECK_2 = [
   },
   {
     id: "20000000-0000-4000-8000-000000000014",
+    level: "A1",
     phrase_en: "back up the database",
     ipa: "/bæk ʌp ðə ˈdeɪtəbeɪs/",
     meaning_vi: "sao lưu dự phòng cơ sở dữ liệu",
@@ -464,6 +496,7 @@ const CARDS_DECK_2 = [
   },
   {
     id: "20000000-0000-4000-8000-000000000015",
+    level: "B1",
     phrase_en: "reproduce the issue",
     ipa: "/ˌriːprəˈduːs ði ˈɪʃuː/",
     meaning_vi: "tái hiện lại lỗi để tìm nguyên nhân",
@@ -477,6 +510,7 @@ const CARDS_DECK_2 = [
   },
   {
     id: "20000000-0000-4000-8000-000000000016",
+    level: "A1",
     phrase_en: "out of service",
     ipa: "/aʊt əv ˈsɜːrvɪs/",
     meaning_vi: "ngừng hoạt động / tạm thời gián đoạn dịch vụ",
@@ -490,6 +524,7 @@ const CARDS_DECK_2 = [
   },
   {
     id: "20000000-0000-4000-8000-000000000017",
+    level: "C2",
     phrase_en: "technical debt",
     ipa: "/ˈteknɪkl det/",
     meaning_vi: "nợ kỹ thuật (mã viết vội cần sửa đổi sau)",
@@ -503,6 +538,7 @@ const CARDS_DECK_2 = [
   },
   {
     id: "20000000-0000-4000-8000-000000000018",
+    level: "A2",
     phrase_en: "scale up",
     ipa: "/skeɪl ʌp/",
     meaning_vi: "mở rộng quy mô chịu tải của hệ thống",
@@ -519,6 +555,7 @@ const CARDS_DECK_2 = [
 const CARDS_DECK_3 = [
   {
     id: "30000000-0000-4000-8000-000000000001",
+    level: "A1",
     phrase_en: "fill out this form",
     ipa: "/fɪl aʊt ðɪs fɔːrm/",
     meaning_vi: "điền vào mẫu đơn này",
@@ -532,6 +569,7 @@ const CARDS_DECK_3 = [
   },
   {
     id: "30000000-0000-4000-8000-000000000002",
+    level: "A2",
     phrase_en: "verify your citizen ID",
     ipa: "/ˈverɪfaɪ jʊr ˈsɪtɪzn aɪˈdiː/",
     meaning_vi: "xác minh căn cước công dân / định danh cá nhân",
@@ -545,6 +583,7 @@ const CARDS_DECK_3 = [
   },
   {
     id: "30000000-0000-4000-8000-000000000003",
+    level: "B1",
     phrase_en: "process your request",
     ipa: "/ˈprɑːses jʊr rɪˈkwest/",
     meaning_vi: "tiếp nhận và xử lý yêu cầu của bạn",
@@ -558,6 +597,7 @@ const CARDS_DECK_3 = [
   },
   {
     id: "30000000-0000-4000-8000-000000000004",
+    level: "C1",
     phrase_en: "please bear with me",
     ipa: "/pliːz ber wɪð miː/",
     meaning_vi: "xin quý khách vui lòng thông cảm đợi tôi một chút",
@@ -571,6 +611,7 @@ const CARDS_DECK_3 = [
   },
   {
     id: "30000000-0000-4000-8000-000000000005",
+    level: "B2",
     phrase_en: "step-by-step guidance",
     ipa: "/step baɪ step ˈɡaɪdns/",
     meaning_vi: "hướng dẫn chi tiết từng bước một",
@@ -584,6 +625,7 @@ const CARDS_DECK_3 = [
   },
   {
     id: "30000000-0000-4000-8000-000000000006",
+    level: "A2",
     phrase_en: "required documents",
     ipa: "/rɪˈkwaɪərd ˈdɑːkjumənts/",
     meaning_vi: "các giấy tờ hồ sơ bắt buộc theo quy định",
@@ -597,6 +639,7 @@ const CARDS_DECK_3 = [
   },
   {
     id: "30000000-0000-4000-8000-000000000007",
+    level: "C1",
     phrase_en: "certified copy",
     ipa: "/ˈsɜːrtɪfaɪd ˈkɑːpi/ ",
     meaning_vi: "bản sao y có công chứng chứng thực",
@@ -610,6 +653,7 @@ const CARDS_DECK_3 = [
   },
   {
     id: "30000000-0000-4000-8000-000000000008",
+    level: "B2",
     phrase_en: "valid through",
     ipa: "/ˈvælɪd θruː/",
     meaning_vi: "có giá trị hiệu lực đến ngày...",
@@ -623,6 +667,7 @@ const CARDS_DECK_3 = [
   },
   {
     id: "30000000-0000-4000-8000-000000000009",
+    level: "C1",
     phrase_en: "notarize the document",
     ipa: "/ˈnoʊtəraɪz ðə ˈdɑːkjumənt/",
     meaning_vi: "công chứng giấy tờ / văn bản",
@@ -636,6 +681,7 @@ const CARDS_DECK_3 = [
   },
   {
     id: "30000000-0000-4000-8000-000000000010",
+    level: "A1",
     phrase_en: "take a queue number",
     ipa: "/teɪk ə kjuː ˈnʌmbər/",
     meaning_vi: "lấy số thứ tự xếp hàng",
@@ -649,6 +695,7 @@ const CARDS_DECK_3 = [
   },
   {
     id: "30000000-0000-4000-8000-000000000011",
+    level: "B1",
     phrase_en: "submit the application",
     ipa: "/səbˈmɪt ði ˌæplɪˈkeɪʃn/",
     meaning_vi: "nộp bộ hồ sơ đăng ký",
@@ -662,6 +709,7 @@ const CARDS_DECK_3 = [
   },
   {
     id: "30000000-0000-4000-8000-000000000012",
+    level: "B2",
     phrase_en: "processing fee",
     ipa: "/ˈprɑːsesɪŋ fiː/",
     meaning_vi: "lệ phí xử lý hồ sơ hành chính",
@@ -675,6 +723,7 @@ const CARDS_DECK_3 = [
   },
   {
     id: "30000000-0000-4000-8000-000000000013",
+    level: "C2",
     phrase_en: "in accordance with",
     ipa: "/ɪn əˈkɔːrdns wɪð/",
     meaning_vi: "đúng theo quy định của pháp luật / chính sách",
@@ -688,6 +737,7 @@ const CARDS_DECK_3 = [
   },
   {
     id: "30000000-0000-4000-8000-000000000014",
+    level: "A2",
     phrase_en: "issue a receipt",
     ipa: "/ˈɪʃuː ə rɪˈsiːt/",
     meaning_vi: "xuất biên lai / hóa đơn thu tiền",
@@ -701,6 +751,7 @@ const CARDS_DECK_3 = [
   },
   {
     id: "30000000-0000-4000-8000-000000000015",
+    level: "A1",
     phrase_en: "counter window",
     ipa: "/ˈkaʊntər ˈwɪndoʊ/",
     meaning_vi: "quầy tiếp nhận số / cửa tiếp nhận thủ tục",
@@ -714,6 +765,7 @@ const CARDS_DECK_3 = [
   },
   {
     id: "30000000-0000-4000-8000-000000000016",
+    level: "B1",
     phrase_en: "tracking number",
     ipa: "/ˈtrækɪŋ ˈnʌmbər/",
     meaning_vi: "mã số biên nhận / mã tra cứu tiến độ",
@@ -727,6 +779,7 @@ const CARDS_DECK_3 = [
   },
   {
     id: "30000000-0000-4000-8000-000000000017",
+    level: "C2",
     phrase_en: "within three working days",
     ipa: "/wɪˈðɪn θriː ˈwɜːrkɪŋ deɪz/",
     meaning_vi: "trong vòng ba ngày làm việc",
@@ -740,6 +793,7 @@ const CARDS_DECK_3 = [
   },
   {
     id: "30000000-0000-4000-8000-000000000018",
+    level: "C2",
     phrase_en: "at your earliest convenience",
     ipa: "/æt jʊr ˈɜːrliɪst kənˈviːniəns/",
     meaning_vi: "vào lúc thuận tiện sớm nhất của bạn",
@@ -756,6 +810,7 @@ const CARDS_DECK_3 = [
 const CARDS_DECK_4 = [
   {
     id: "40000000-0000-4000-8000-000000000001",
+    level: "A2",
     phrase_en: "walk me through your resume",
     ipa: "/wɔːk miː θruː jʊr ˈrezəmeɪ/",
     meaning_vi: "tóm tắt quá trình kinh nghiệm trong hồ sơ của bạn",
@@ -769,6 +824,7 @@ const CARDS_DECK_4 = [
   },
   {
     id: "40000000-0000-4000-8000-000000000002",
+    level: "B1",
     phrase_en: "hands-on experience",
     ipa: "/hændz ɑːn ɪkˈspɪriəns/",
     meaning_vi: "kinh nghiệm thực tế / kinh nghiệm cọ xát thực chiến",
@@ -782,6 +838,7 @@ const CARDS_DECK_4 = [
   },
   {
     id: "40000000-0000-4000-8000-000000000003",
+    level: "C1",
     phrase_en: "align with company goals",
     ipa: "/əˈlaɪn wɪð ˈkʌmpəni ɡoʊlz/",
     meaning_vi: "đồng điệu và phù hợp với mục tiêu của công ty",
@@ -795,6 +852,7 @@ const CARDS_DECK_4 = [
   },
   {
     id: "40000000-0000-4000-8000-000000000004",
+    level: "B2",
     phrase_en: "room for growth",
     ipa: "/ruːm fɔːr ɡroʊθ/",
     meaning_vi: "cơ hội học hỏi và thăng tiến trong sự nghiệp",
@@ -808,6 +866,7 @@ const CARDS_DECK_4 = [
   },
   {
     id: "40000000-0000-4000-8000-000000000005",
+    level: "B2",
     phrase_en: "meet expectations",
     ipa: "/miːt ˌekspekˈteɪʃnz/",
     meaning_vi: "đáp ứng tốt các kỳ vọng đặt ra",
@@ -821,6 +880,7 @@ const CARDS_DECK_4 = [
   },
   {
     id: "40000000-0000-4000-8000-000000000006",
+    level: "B1",
     phrase_en: "salary expectations",
     ipa: "/ˈsæləri ˌekspekˈteɪʃnz/",
     meaning_vi: "mức lương / thu nhập kỳ vọng",
@@ -834,6 +894,7 @@ const CARDS_DECK_4 = [
   },
   {
     id: "40000000-0000-4000-8000-000000000007",
+    level: "C2",
     phrase_en: "competitive benefits package",
     ipa: "/kəmˈpetətɪv ˈbenɪfɪts ˈpækɪdʒ/",
     meaning_vi: "gói chế độ đãi ngộ và phúc lợi hấp dẫn",
@@ -847,6 +908,7 @@ const CARDS_DECK_4 = [
   },
   {
     id: "40000000-0000-4000-8000-000000000008",
+    level: "C1",
     phrase_en: "proven track record",
     ipa: "/ˈpruːvn træk ˈrekərd/",
     meaning_vi: "bề dày thành tích đã được chứng minh qua thực tế",
@@ -860,6 +922,7 @@ const CARDS_DECK_4 = [
   },
   {
     id: "40000000-0000-4000-8000-000000000009",
+    level: "A1",
     phrase_en: "strengths and weaknesses",
     ipa: "/streŋkθs ænd ˈwiːknəsɪz/",
     meaning_vi: "điểm mạnh và điểm cần cải thiện",
@@ -873,6 +936,7 @@ const CARDS_DECK_4 = [
   },
   {
     id: "40000000-0000-4000-8000-000000000010",
+    level: "A2",
     phrase_en: "adapt quickly to",
     ipa: "/əˈdæpt ˈkwɪkli tuː/",
     meaning_vi: "thích nghi nhanh chóng với môi trường / công nghệ mới",
@@ -886,6 +950,7 @@ const CARDS_DECK_4 = [
   },
   {
     id: "40000000-0000-4000-8000-000000000011",
+    level: "B1",
     phrase_en: "problem-solving skill",
     ipa: "/ˈprɑːbləm ˈsɑːlvɪŋ skɪl/",
     meaning_vi: "kỹ năng tư duy giải quyết vấn đề",
@@ -899,6 +964,7 @@ const CARDS_DECK_4 = [
   },
   {
     id: "40000000-0000-4000-8000-000000000012",
+    level: "B2",
     phrase_en: "work under pressure",
     ipa: "/wɜːrk ˈʌndər ˈpreʃər/",
     meaning_vi: "chịu được áp lực cao trong công việc",
@@ -912,6 +978,7 @@ const CARDS_DECK_4 = [
   },
   {
     id: "40000000-0000-4000-8000-000000000013",
+    level: "C1",
     phrase_en: "stand out from the crowd",
     ipa: "/stænd aʊt frʌm ðə kraʊd/",
     meaning_vi: "tạo điểm nhấn khác biệt nổi bật so với các ứng viên khác",
@@ -925,6 +992,7 @@ const CARDS_DECK_4 = [
   },
   {
     id: "40000000-0000-4000-8000-000000000014",
+    level: "A1",
     phrase_en: "team player",
     ipa: "/tiːm ˈpleɪər/",
     meaning_vi: "người có tinh thần đồng đội / biết phối hợp ăn ý",
@@ -938,6 +1006,7 @@ const CARDS_DECK_4 = [
   },
   {
     id: "40000000-0000-4000-8000-000000000015",
+    level: "C2",
     phrase_en: "notice period",
     ipa: "/ˈnoʊtɪs ˈpɪriəd/",
     meaning_vi: "thời hạn báo trước khi chính thức nghỉ việc cũ",
@@ -951,6 +1020,7 @@ const CARDS_DECK_4 = [
   },
   {
     id: "40000000-0000-4000-8000-000000000016",
+    level: "A2",
     phrase_en: "negotiable",
     ipa: "/nɪˈɡoʊʃiəbl/",
     meaning_vi: "có thể thương lượng / linh hoạt trao đổi thêm",
@@ -964,6 +1034,7 @@ const CARDS_DECK_4 = [
   },
   {
     id: "40000000-0000-4000-8000-000000000017",
+    level: "C2",
     phrase_en: "fit into the company culture",
     ipa: "/fɪt ˈɪntuː ðə ˈkʌmpəni ˈkʌltʃər/",
     meaning_vi: "hòa nhập tốt với văn hóa và phong cách làm việc của công ty",
@@ -977,6 +1048,7 @@ const CARDS_DECK_4 = [
   },
   {
     id: "40000000-0000-4000-8000-000000000018",
+    level: "A1",
     phrase_en: "look forward to hearing from you",
     ipa: "/lʊk ˈfɔːrwərd tuː ˈhɪrɪŋ frʌm juː/",
     meaning_vi: "rất mong sớm nhận được phản hồi từ quý công ty",
@@ -993,6 +1065,7 @@ const CARDS_DECK_4 = [
 const CARDS_DECK_5 = [
   {
     id: "50000000-0000-4000-8000-000000000001",
+    level: "A1",
     phrase_en: "how's it going",
     ipa: "/haʊz ɪt ˈɡoʊɪŋ/",
     meaning_vi: "dạo này thế nào rồi? / công việc ổn cả chứ?",
@@ -1006,6 +1079,7 @@ const CARDS_DECK_5 = [
   },
   {
     id: "50000000-0000-4000-8000-000000000002",
+    level: "B2",
     phrase_en: "fingers crossed",
     ipa: "/ˈfɪŋɡərz krɔːst/",
     meaning_vi: "cầu mong mọi chuyện may mắn / suôn sẻ nhé",
@@ -1019,6 +1093,7 @@ const CARDS_DECK_5 = [
   },
   {
     id: "50000000-0000-4000-8000-000000000003",
+    level: "B1",
     phrase_en: "take it easy",
     ipa: "/teɪk ɪt ˈiːzi/",
     meaning_vi: "cứ thư thả / đừng lo lắng quá nhé",
@@ -1032,6 +1107,7 @@ const CARDS_DECK_5 = [
   },
   {
     id: "50000000-0000-4000-8000-000000000004",
+    level: "C1",
     phrase_en: "out of the blue",
     ipa: "/aʊt əv ðə bluː/",
     meaning_vi: "bất thình lình / hoàn toàn bất ngờ không báo trước",
@@ -1045,6 +1121,7 @@ const CARDS_DECK_5 = [
   },
   {
     id: "50000000-0000-4000-8000-000000000005",
+    level: "C1",
     phrase_en: "ring a bell",
     ipa: "/rɪŋ ə bel/",
     meaning_vi: "nghe quen quen / có chút ấn tượng nhớ ra",
@@ -1058,6 +1135,7 @@ const CARDS_DECK_5 = [
   },
   {
     id: "50000000-0000-4000-8000-000000000006",
+    level: "A2",
     phrase_en: "count me in",
     ipa: "/kaʊnt miː ɪn/",
     meaning_vi: "cho tôi tham gia với nhé / nhớ tính phần tôi!",
@@ -1071,6 +1149,7 @@ const CARDS_DECK_5 = [
   },
   {
     id: "50000000-0000-4000-8000-000000000007",
+    level: "A1",
     phrase_en: "catch you later",
     ipa: "/kætʃ juː ˈleɪtər/",
     meaning_vi: "hẹn gặp lại bạn sau nhé",
@@ -1084,6 +1163,7 @@ const CARDS_DECK_5 = [
   },
   {
     id: "50000000-0000-4000-8000-000000000008",
+    level: "A1",
     phrase_en: "long time no see",
     ipa: "/lɔːŋ taɪm noʊ siː/",
     meaning_vi: "lâu ngày quá không gặp nhau!",
@@ -1097,6 +1177,7 @@ const CARDS_DECK_5 = [
   },
   {
     id: "50000000-0000-4000-8000-000000000009",
+    level: "A2",
     phrase_en: "grab a bite to eat",
     ipa: "/ɡræb ə baɪt tuː iːt/",
     meaning_vi: "đi kiếm gì ăn lót dạ đi",
@@ -1110,6 +1191,7 @@ const CARDS_DECK_5 = [
   },
   {
     id: "50000000-0000-4000-8000-000000000010",
+    level: "B2",
     phrase_en: "slip my mind",
     ipa: "/slɪp maɪ maɪnd/",
     meaning_vi: "quên khuấy đi mất tiêu",
@@ -1123,6 +1205,7 @@ const CARDS_DECK_5 = [
   },
   {
     id: "50000000-0000-4000-8000-000000000011",
+    level: "B1",
     phrase_en: "give it a shot",
     ipa: "/ɡɪv ɪt ə ʃɑːt/",
     meaning_vi: "cứ thử làm một lần xem sao",
@@ -1136,6 +1219,7 @@ const CARDS_DECK_5 = [
   },
   {
     id: "50000000-0000-4000-8000-000000000012",
+    level: "C1",
     phrase_en: "sleep on it",
     ipa: "/sliːp ɑːn ɪt/",
     meaning_vi: "để ngủ một đêm suy nghĩ kỹ lại rồi hãy quyết định",
@@ -1149,6 +1233,7 @@ const CARDS_DECK_5 = [
   },
   {
     id: "50000000-0000-4000-8000-000000000013",
+    level: "B2",
     phrase_en: "make up my mind",
     ipa: "/meɪk ʌp maɪ maɪnd/",
     meaning_vi: "đưa ra quyết định dứt khoát",
@@ -1162,6 +1247,7 @@ const CARDS_DECK_5 = [
   },
   {
     id: "50000000-0000-4000-8000-000000000014",
+    level: "C2",
     phrase_en: "take a rain check",
     ipa: "/teɪk ə reɪn tʃek/",
     meaning_vi: "xin phép hẹn dịp khác nhé",
@@ -1175,6 +1261,7 @@ const CARDS_DECK_5 = [
   },
   {
     id: "50000000-0000-4000-8000-000000000015",
+    level: "A2",
     phrase_en: "keep in touch",
     ipa: "/kiːp ɪn tʌtʃ/",
     meaning_vi: "nhớ giữ liên lạc thường xuyên nhé",
@@ -1188,6 +1275,7 @@ const CARDS_DECK_5 = [
   },
   {
     id: "50000000-0000-4000-8000-000000000016",
+    level: "C2",
     phrase_en: "speak of the devil",
     ipa: "/spiːk əv ðə ˈdevl/",
     meaning_vi: "vừa nhắc tào tháo là tào tháo tới liền!",
@@ -1201,6 +1289,7 @@ const CARDS_DECK_5 = [
   },
   {
     id: "50000000-0000-4000-8000-000000000017",
+    level: "C2",
     phrase_en: "on the tip of my tongue",
     ipa: "/ɑːn ðə tɪp əv maɪ tʌŋ/",
     meaning_vi: "nhớ mang máng, ngay đầu môi mà chưa nhớ ra được",
@@ -1214,6 +1303,7 @@ const CARDS_DECK_5 = [
   },
   {
     id: "50000000-0000-4000-8000-000000000018",
+    level: "B1",
     phrase_en: "you bet",
     ipa: "/juː bet/",
     meaning_vi: "chắc chắn rồi / không cần phải hỏi!",
@@ -1230,6 +1320,7 @@ const CARDS_DECK_5 = [
 const CARDS_DECK_6 = [
   {
     id: "60000000-0000-4000-8000-000000000001",
+    level: "A2",
     phrase_en: "window or aisle seat",
     ipa: "/ˈwɪndoʊ ɔːr aɪl siːt/",
     meaning_vi: "ghế cạnh cửa sổ hay ghế cạnh lối đi",
@@ -1243,6 +1334,7 @@ const CARDS_DECK_6 = [
   },
   {
     id: "60000000-0000-4000-8000-000000000002",
+    level: "A2",
     phrase_en: "check in baggage",
     ipa: "/tʃek ɪn ˈbæɡɪdʒ/",
     meaning_vi: "gửi hành lý ký gửi tại quầy",
@@ -1256,6 +1348,7 @@ const CARDS_DECK_6 = [
   },
   {
     id: "60000000-0000-4000-8000-000000000003",
+    level: "A2",
     phrase_en: "book a table for two",
     ipa: "/bʊk ə ˈteɪbl fɔːr tuː/",
     meaning_vi: "đặt trước một bàn ăn cho hai người",
@@ -1269,6 +1362,7 @@ const CARDS_DECK_6 = [
   },
   {
     id: "60000000-0000-4000-8000-000000000004",
+    level: "B2",
     phrase_en: "there seems to be a problem",
     ipa: "/ðer siːmz tuː biː ə ˈprɑːbləm/",
     meaning_vi: "dường như đang có một sự cố phát sinh",
@@ -1282,6 +1376,7 @@ const CARDS_DECK_6 = [
   },
   {
     id: "60000000-0000-4000-8000-000000000005",
+    level: "C1",
     phrase_en: "keep me posted",
     ipa: "/kiːp miː ˈpoʊstɪd/",
     meaning_vi: "có tin gì mới nhớ báo mình biết ngay nhé",
@@ -1295,6 +1390,7 @@ const CARDS_DECK_6 = [
   },
   {
     id: "60000000-0000-4000-8000-000000000006",
+    level: "C1",
     phrase_en: "sort things out",
     ipa: "/sɔːrt θɪŋz aʊt/",
     meaning_vi: "dàn xếp ổn thỏa mọi khúc mắc / xử lý xong vấn đề",
@@ -1308,6 +1404,7 @@ const CARDS_DECK_6 = [
   },
   {
     id: "60000000-0000-4000-8000-000000000007",
+    level: "A1",
     phrase_en: "boarding pass",
     ipa: "/ˈbɔːrdɪŋ pæs/",
     meaning_vi: "thẻ lên máy bay",
@@ -1321,6 +1418,7 @@ const CARDS_DECK_6 = [
   },
   {
     id: "60000000-0000-4000-8000-000000000008",
+    level: "B1",
     phrase_en: "carry-on luggage",
     ipa: "/ˈkæri ɑːn ˈlʌɡɪdʒ/",
     meaning_vi: "hành lý xách tay mang lên khoang máy bay",
@@ -1334,6 +1432,7 @@ const CARDS_DECK_6 = [
   },
   {
     id: "60000000-0000-4000-8000-000000000009",
+    level: "B1",
     phrase_en: "flight delay",
     ipa: "/flaɪt dɪˈleɪ/",
     meaning_vi: "chuyến bay bị hoãn giờ cất cánh",
@@ -1347,6 +1446,7 @@ const CARDS_DECK_6 = [
   },
   {
     id: "60000000-0000-4000-8000-000000000010",
+    level: "B2",
     phrase_en: "lost and found",
     ipa: "/lɔːst ænd faʊnd/",
     meaning_vi: "quầy tiếp nhận đồ thất lạc",
@@ -1360,6 +1460,7 @@ const CARDS_DECK_6 = [
   },
   {
     id: "60000000-0000-4000-8000-000000000011",
+    level: "B2",
     phrase_en: "currency exchange",
     ipa: "/ˈkɜːrənsi ɪksˈtʃeɪndʒ/",
     meaning_vi: "quầy đổi ngoại tệ",
@@ -1373,6 +1474,7 @@ const CARDS_DECK_6 = [
   },
   {
     id: "60000000-0000-4000-8000-000000000012",
+    level: "A1",
     phrase_en: "call an ambulance",
     ipa: "/kɔːl ən ˈæmbjələns/",
     meaning_vi: "gọi ngay xe cấp cứu",
@@ -1386,6 +1488,7 @@ const CARDS_DECK_6 = [
   },
   {
     id: "60000000-0000-4000-8000-000000000013",
+    level: "C1",
     phrase_en: "lost my passport",
     ipa: "/lɔːst maɪ ˈpæspɔːrt/",
     meaning_vi: "bị mất hộ chiếu",
@@ -1399,6 +1502,7 @@ const CARDS_DECK_6 = [
   },
   {
     id: "60000000-0000-4000-8000-000000000014",
+    level: "C2",
     phrase_en: "complimentary breakfast",
     ipa: "/ˌkɑːmplɪˈmentri ˈbrekfəst/",
     meaning_vi: "bữa sáng buffet miễn phí đi kèm theo phòng",
@@ -1412,6 +1516,7 @@ const CARDS_DECK_6 = [
   },
   {
     id: "60000000-0000-4000-8000-000000000015",
+    level: "C2",
     phrase_en: "itinerary",
     ipa: "/aɪˈtɪnəreri/",
     meaning_vi: "lịch trình chuyến đi chi tiết",
@@ -1425,6 +1530,7 @@ const CARDS_DECK_6 = [
   },
   {
     id: "60000000-0000-4000-8000-000000000016",
+    level: "B1",
     phrase_en: "nearest subway station",
     ipa: "/ˈnɪrɪst ˈsʌbweɪ ˈsteɪʃn/",
     meaning_vi: "ga tàu điện ngầm gần nhất",
@@ -1438,6 +1544,7 @@ const CARDS_DECK_6 = [
   },
   {
     id: "60000000-0000-4000-8000-000000000017",
+    level: "C2",
     phrase_en: "emergency exit",
     ipa: "/iˈmɜːrdʒənsi ˈeɡzɪt/",
     meaning_vi: "cửa thoát hiểm khẩn cấp",
@@ -1451,6 +1558,7 @@ const CARDS_DECK_6 = [
   },
   {
     id: "60000000-0000-4000-8000-000000000018",
+    level: "A1",
     phrase_en: "check-out time",
     ipa: "/ˈtʃekaʊt taɪm/",
     meaning_vi: "giờ trả phòng khách sạn",
@@ -1476,17 +1584,133 @@ const ALL_CARDS = [
 console.log(`Generated ${DECKS.length} decks and ${ALL_CARDS.length} cards.`);
 
 // Output TS code for lib/seedData.ts
-let tsCode = `export interface Deck {
+let tsCode = `export type CEFRLevel = "A1" | "A2" | "B1" | "B2" | "C1" | "C2";
+
+export interface CEFRLevelInfo {
+  level: CEFRLevel;
+  code: string;
+  nameVi: string;
+  nameEn: string;
+  descriptionVi: string;
+  colorBg: string;
+  colorText: string;
+  colorBorder: string;
+  badgeClass: string;
+  activeClass: string;
+}
+
+export const CEFR_LEVELS_META: Record<CEFRLevel, CEFRLevelInfo> = {
+  A1: {
+    level: "A1",
+    code: "A1",
+    nameVi: "Cơ bản",
+    nameEn: "Beginner",
+    descriptionVi: "Mẫu câu sinh tồn & giao tiếp tối giản hàng ngày.",
+    colorBg: "bg-emerald-50",
+    colorText: "text-emerald-700",
+    colorBorder: "border-emerald-200",
+    badgeClass: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    activeClass: "bg-emerald-500 text-white border-emerald-600 shadow-emerald-500/25",
+  },
+  A2: {
+    level: "A2",
+    code: "A2",
+    nameVi: "Sơ cấp",
+    nameEn: "Elementary",
+    descriptionVi: "Câu tình huống thông dụng & trao đổi quen thuộc.",
+    colorBg: "bg-teal-50",
+    colorText: "text-teal-700",
+    colorBorder: "border-teal-200",
+    badgeClass: "bg-teal-50 text-teal-700 border-teal-200",
+    activeClass: "bg-teal-500 text-white border-teal-600 shadow-teal-500/25",
+  },
+  B1: {
+    level: "B1",
+    code: "B1",
+    nameVi: "Trung cấp",
+    nameEn: "Intermediate",
+    descriptionVi: "Giao tiếp công sở & xử lý tình huống tự nhiên.",
+    colorBg: "bg-sky-50",
+    colorText: "text-sky-700",
+    colorBorder: "border-sky-200",
+    badgeClass: "bg-sky-50 text-sky-700 border-sky-200",
+    activeClass: "bg-sky-500 text-white border-sky-600 shadow-sky-500/25",
+  },
+  B2: {
+    level: "B2",
+    code: "B2",
+    nameVi: "Trung cao cấp",
+    nameEn: "Upper-Intermediate",
+    descriptionVi: "Cụm động từ linh hoạt, thảo luận chuyên sâu & phản xạ lưu loát.",
+    colorBg: "bg-indigo-50",
+    colorText: "text-indigo-700",
+    colorBorder: "border-indigo-200",
+    badgeClass: "bg-indigo-50 text-indigo-700 border-indigo-200",
+    activeClass: "bg-indigo-500 text-white border-indigo-600 shadow-indigo-500/25",
+  },
+  C1: {
+    level: "C1",
+    code: "C1",
+    nameVi: "Cao cấp",
+    nameEn: "Advanced",
+    descriptionVi: "Thành ngữ biểu cảm, sắc thái chuyên nghiệp & lập luận sắc bén.",
+    colorBg: "bg-purple-50",
+    colorText: "text-purple-700",
+    colorBorder: "border-purple-200",
+    badgeClass: "bg-purple-50 text-purple-700 border-purple-200",
+    activeClass: "bg-purple-500 text-white border-purple-600 shadow-purple-500/25",
+  },
+  C2: {
+    level: "C2",
+    code: "C2",
+    nameVi: "Thành thạo",
+    nameEn: "Mastery",
+    descriptionVi: "Sắc thái chuẩn bản xứ, lối nói tinh tế & đỉnh cao phản xạ.",
+    colorBg: "bg-rose-50",
+    colorText: "text-rose-700",
+    colorBorder: "border-rose-200",
+    badgeClass: "bg-rose-50 text-rose-700 border-rose-200",
+    activeClass: "bg-rose-500 text-white border-rose-600 shadow-rose-500/25",
+  },
+};
+
+export const CEFR_LEVEL_LIST: CEFRLevel[] = ["A1", "A2", "B1", "B2", "C1", "C2"];
+
+export function getLevelBadgeColor(level?: string): {
+  bg: string;
+  text: string;
+  border: string;
+  label: string;
+} {
+  const norm = (level?.toUpperCase() || "B1") as CEFRLevel;
+  const meta = CEFR_LEVELS_META[norm] || CEFR_LEVELS_META.B1;
+  return {
+    bg: meta.colorBg,
+    text: meta.colorText,
+    border: meta.colorBorder,
+    label: \`\${meta.code} • \${meta.nameVi}\`,
+  };
+}
+
+export interface Deck {
   id: string;
   title: string;
   description: string;
   icon: string;
   created_at: string;
+  user_id?: string | null;
+  is_system?: boolean;
+  is_public?: boolean;
+  share_code?: string;
+  cloned_from_id?: string | null;
+  clone_count?: number;
+  author_name?: string | null;
 }
 
 export interface Card {
   id: string;
   deck_id: string;
+  user_id?: string | null;
   phrase_en: string;
   ipa: string;
   meaning_vi: string;
@@ -1494,6 +1718,7 @@ export interface Card {
   sentence_vi: string;
   context_note: string;
   variations?: string[];
+  level: CEFRLevel;
   box: number; // 1 to 5
   interval_days: number;
   ease_factor: number;
@@ -1501,9 +1726,81 @@ export interface Card {
   last_practiced_at: string | null;
 }
 
+export const SYSTEM_DECK_IDS = new Set([
+  "11111111-1111-4111-8111-111111111111",
+  "22222222-2222-4222-8222-222222222222",
+  "33333333-3333-4333-8333-333333333333",
+  "44444444-4444-4444-8444-444444444444",
+  "55555555-5555-4555-8555-555555555555",
+  "66666666-6666-4666-8666-666666666666",
+]);
+
+export function isSystemDeck(deckId: string): boolean {
+  return SYSTEM_DECK_IDS.has(deckId);
+}
+
+export function isSystemCard(card: Card): boolean {
+  return !card.user_id && isSystemDeck(card.deck_id);
+}
+
 const nowIso = new Date().toISOString();
 
-export const SEED_DECKS: Deck[] = ${JSON.stringify(DECKS.map(d => ({ ...d, created_at: "__NOW_ISO__" })), null, 2).replace(/"__NOW_ISO__"/g, 'nowIso')};
+export const SEED_DECKS: Deck[] = [
+  {
+    "id": "11111111-1111-4111-8111-111111111111",
+    "title": "Giao tiếp Công sở & Họp hành",
+    "description": "Báo cáo tiến độ, giải quyết sự cố, chốt deadline và cách trình bày ý kiến lịch sự, thuyết phục.",
+    "icon": "Briefcase",
+    "created_at": nowIso,
+    "is_system": true,
+    "is_public": true
+  },
+  {
+    "id": "22222222-2222-4222-8222-222222222222",
+    "title": "Kỹ thuật, IT & Vận hành Hệ thống",
+    "description": "Trao đổi Daily Standup, xử lý lỗi hệ thống, deploy phần mềm và giải thích kỹ thuật cho đối tác.",
+    "icon": "Terminal",
+    "created_at": nowIso,
+    "is_system": true,
+    "is_public": true
+  },
+  {
+    "id": "33333333-3333-4333-8333-333333333333",
+    "title": "Hành chính công & Giao tiếp Khách hàng",
+    "description": "Hướng dẫn thủ tục, tiếp nhận yêu cầu, giải thích giấy tờ và giữ thái độ lịch sự, chuyên nghiệp.",
+    "icon": "FileText",
+    "created_at": nowIso,
+    "is_system": true,
+    "is_public": true
+  },
+  {
+    "id": "44444444-4444-4444-8444-444444444444",
+    "title": "Phỏng vấn Xin việc & Deal Lương",
+    "description": "Giới thiệu bản thân, chia sẻ kinh nghiệm thực tế, ứng biến tình huống và đàm phán đãi ngộ.",
+    "icon": "Award",
+    "created_at": nowIso,
+    "is_system": true,
+    "is_public": true
+  },
+  {
+    "id": "55555555-5555-4555-8555-555555555555",
+    "title": "Small Talk & Kết bạn Hàng ngày",
+    "description": "Bắt chuyện làm quen, nói về kế hoạch cuối tuần, bày tỏ cảm xúc và giữ mạch trò chuyện tự nhiên.",
+    "icon": "Zap",
+    "created_at": nowIso,
+    "is_system": true,
+    "is_public": true
+  },
+  {
+    "id": "66666666-6666-4666-8666-666666666666",
+    "title": "Du lịch, Sân bay & Xử lý tình huống khẩn cấp",
+    "description": "Làm thủ tục sân bay, đặt bàn, hỏi đường, mua sắm và xử lý tình huống phát sinh khẩn cấp.",
+    "icon": "Plane",
+    "created_at": nowIso,
+    "is_system": true,
+    "is_public": true
+  }
+];
 
 export const SEED_CARDS: Card[] = [
 `;
@@ -1525,6 +1822,7 @@ for (let i = 0; i < DECKS.length; i++) {
     tsCode += `    sentence_vi: ${JSON.stringify(c.sentence_vi)},\n`;
     tsCode += `    context_note: ${JSON.stringify(c.context_note)},\n`;
     tsCode += `    variations: ${JSON.stringify(c.variations)},\n`;
+    tsCode += `    level: ${JSON.stringify(c.level || "B1")},\n`;
     tsCode += `    box: 1,\n`;
     tsCode += `    interval_days: 0,\n`;
     tsCode += `    ease_factor: 2.5,\n`;
@@ -1549,16 +1847,32 @@ BEGIN
   -- Enable UUID generation extension if not already enabled
   CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
-  -- 1. Create \`decks\` table
+  -- 1. Create decks table
   CREATE TABLE IF NOT EXISTS public.decks (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     title TEXT NOT NULL,
     description TEXT NOT NULL,
     icon TEXT NOT NULL DEFAULT 'MessageSquare',
+    user_id UUID,
+    is_system BOOLEAN NOT NULL DEFAULT false,
+    is_public BOOLEAN NOT NULL DEFAULT false,
+    share_code VARCHAR(32),
+    cloned_from_id UUID,
+    clone_count INT NOT NULL DEFAULT 0,
+    author_name TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   );
 
-  -- 2. Create \`cards\` table
+  -- Ensure custom deck ownership and sharing columns exist on decks
+  ALTER TABLE public.decks ADD COLUMN IF NOT EXISTS user_id UUID;
+  ALTER TABLE public.decks ADD COLUMN IF NOT EXISTS is_system BOOLEAN NOT NULL DEFAULT false;
+  ALTER TABLE public.decks ADD COLUMN IF NOT EXISTS is_public BOOLEAN NOT NULL DEFAULT false;
+  ALTER TABLE public.decks ADD COLUMN IF NOT EXISTS share_code VARCHAR(32);
+  ALTER TABLE public.decks ADD COLUMN IF NOT EXISTS cloned_from_id UUID;
+  ALTER TABLE public.decks ADD COLUMN IF NOT EXISTS clone_count INT NOT NULL DEFAULT 0;
+  ALTER TABLE public.decks ADD COLUMN IF NOT EXISTS author_name TEXT;
+
+  -- 2. Create cards table
   CREATE TABLE IF NOT EXISTS public.cards (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     deck_id UUID NOT NULL REFERENCES public.decks(id) ON DELETE CASCADE,
@@ -1570,6 +1884,7 @@ BEGIN
     sentence_vi TEXT NOT NULL,
     context_note TEXT NOT NULL,
     variations TEXT[] NOT NULL DEFAULT '{}',
+    level VARCHAR(5) NOT NULL DEFAULT 'B1',
     box INT NOT NULL DEFAULT 1 CHECK (box BETWEEN 1 AND 5),
     interval_days INT NOT NULL DEFAULT 0,
     ease_factor FLOAT NOT NULL DEFAULT 2.5,
@@ -1577,23 +1892,12 @@ BEGIN
     last_practiced_at TIMESTAMPTZ
   );
 
-  -- Ensure \`user_id\` column exists on \`cards\` if table was created earlier
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.columns
-    WHERE table_schema = 'public' AND table_name = 'cards' AND column_name = 'user_id'
-  ) THEN
-    ALTER TABLE public.cards ADD COLUMN user_id UUID;
-  END IF;
+  -- Ensure user_id, variations, and level columns exist on cards
+  ALTER TABLE public.cards ADD COLUMN IF NOT EXISTS user_id UUID;
+  ALTER TABLE public.cards ADD COLUMN IF NOT EXISTS variations TEXT[] NOT NULL DEFAULT '{}';
+  ALTER TABLE public.cards ADD COLUMN IF NOT EXISTS level VARCHAR(5) NOT NULL DEFAULT 'B1';
 
-  -- Ensure \`variations\` column exists on \`cards\` if table was created earlier
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.columns
-    WHERE table_schema = 'public' AND table_name = 'cards' AND column_name = 'variations'
-  ) THEN
-    ALTER TABLE public.cards ADD COLUMN variations TEXT[] NOT NULL DEFAULT '{}';
-  END IF;
-
-  -- 3. Create \`user_card_progress\` table (Per-user SRS progress synced across PC & Mobile)
+  -- 3. Create user_card_progress table (Per-user SRS progress synced across PC & Mobile)
   CREATE TABLE IF NOT EXISTS public.user_card_progress (
     user_id UUID NOT NULL,
     card_id UUID NOT NULL REFERENCES public.cards(id) ON DELETE CASCADE,
@@ -1605,7 +1909,7 @@ BEGIN
     PRIMARY KEY (user_id, card_id)
   );
 
-  -- 4. Create \`user_stats\` table (Per-user daily streak & profile info)
+  -- 4. Create user_stats table (Per-user daily streak & profile info)
   CREATE TABLE IF NOT EXISTS public.user_stats (
     user_id UUID PRIMARY KEY,
     email TEXT,
@@ -1619,6 +1923,7 @@ BEGIN
 
   -- Create helpful indexes for fast SRS queries
   CREATE INDEX IF NOT EXISTS idx_cards_deck_id ON public.cards(deck_id);
+  CREATE INDEX IF NOT EXISTS idx_cards_level ON public.cards(level);
   CREATE INDEX IF NOT EXISTS idx_cards_next_review_at ON public.cards(next_review_at);
   CREATE INDEX IF NOT EXISTS idx_user_card_progress_user ON public.user_card_progress(user_id);
 
@@ -1653,13 +1958,13 @@ BEGIN
   END IF;
 
   -- 5. SEED DATA: 6 CONVERSATIONAL DECKS + 108 HIGH-UTILITY REFLEX CARDS (18 PER DECK)
-  INSERT INTO public.decks (id, title, description, icon, created_at) VALUES
+  INSERT INTO public.decks (id, title, description, icon, is_system, is_public, created_at) VALUES
 `;
 
 for (let i = 0; i < DECKS.length; i++) {
   const d = DECKS[i];
   const comma = i === DECKS.length - 1 ? '' : ',';
-  sqlCode += `    ('${d.id}', '${d.title.replace(/'/g, "''")}', '${d.description.replace(/'/g, "''")}', '${d.icon}', NOW())${comma}\n`;
+  sqlCode += `    ('${d.id}', '${d.title.replace(/'/g, "''")}', '${d.description.replace(/'/g, "''")}', '${d.icon}', true, true, NOW())${comma}\n`;
 }
 
 sqlCode += `  ON CONFLICT (id) DO UPDATE SET
@@ -1668,7 +1973,7 @@ sqlCode += `  ON CONFLICT (id) DO UPDATE SET
     icon = EXCLUDED.icon;
 
   INSERT INTO public.cards (
-    id, deck_id, phrase_en, ipa, meaning_vi, sentence_en, sentence_vi, context_note, variations, box, interval_days, ease_factor, next_review_at, last_practiced_at
+    id, deck_id, phrase_en, ipa, meaning_vi, sentence_en, sentence_vi, context_note, variations, level, box, interval_days, ease_factor, next_review_at, last_practiced_at
   ) VALUES
 `;
 
@@ -1686,6 +1991,7 @@ for (let i = 0; i < ALL_CARDS.length; i++) {
       '${c.sentence_vi.replace(/'/g, "''")}',
       '${c.context_note.replace(/'/g, "''")}',
       ${varArraySql},
+      '${c.level || "B1"}',
       1, 0, 2.5, NOW(), NULL
     )${comma}\n`;
 }
@@ -1698,7 +2004,8 @@ sqlCode += `  ON CONFLICT (id) DO UPDATE SET
     sentence_en = EXCLUDED.sentence_en,
     sentence_vi = EXCLUDED.sentence_vi,
     context_note = EXCLUDED.context_note,
-    variations = EXCLUDED.variations;
+    variations = EXCLUDED.variations,
+    level = EXCLUDED.level;
 
 END $speakflow$;
 `;

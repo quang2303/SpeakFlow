@@ -27,8 +27,14 @@ import {
   StreakData,
   UserProfile,
 } from "@/lib/dataService";
-import { Card, Deck } from "@/lib/seedData";
+import {
+  Card,
+  Deck,
+  CEFR_LEVELS_META,
+  CEFR_LEVEL_LIST,
+} from "@/lib/seedData";
 import { isCardDue } from "@/lib/srs";
+import LevelSelectorModal from "@/components/LevelSelectorModal";
 
 function getDeckIcon(iconName: string) {
   switch (iconName) {
@@ -61,6 +67,15 @@ export default function HomePage() {
   });
   const [user, setUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [selectedDeckForLevel, setSelectedDeckForLevel] = useState<Deck | null>(null);
+  const [isLevelModalOpen, setIsLevelModalOpen] = useState(false);
+  const [levelModalMode, setLevelModalMode] = useState<"study" | "reflex">("study");
+
+  function openLevelModal(deck: Deck | null, mode: "study" | "reflex" = "study") {
+    setSelectedDeckForLevel(deck);
+    setLevelModalMode(mode);
+    setIsLevelModalOpen(true);
+  }
 
   const syncDashboardFromLocal = useCallback(() => {
     const localData = getInitialLocalData();
@@ -131,21 +146,23 @@ export default function HomePage() {
         </div>
 
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 shrink-0">
-          <Link
-            href="/study"
-            className="inline-flex items-center justify-center gap-2 px-7 py-3.5 rounded-2xl bg-brand-500 hover:bg-brand-600 text-white font-semibold text-base shadow-md shadow-brand-500/25 hover:shadow-lg hover:shadow-brand-500/30 active:scale-[0.98] transition-all"
+          <button
+            type="button"
+            onClick={() => openLevelModal(null, "study")}
+            className="inline-flex items-center justify-center gap-2 px-7 py-3.5 rounded-2xl bg-brand-500 hover:bg-brand-600 text-white font-semibold text-base shadow-md shadow-brand-500/25 hover:shadow-lg hover:shadow-brand-500/30 active:scale-[0.98] transition-all cursor-pointer"
           >
             <Play className="w-5 h-5 fill-white" />
             <span>Bắt đầu học</span>
-          </Link>
+          </button>
 
-          <Link
-            href="/reflex"
-            className="inline-flex items-center justify-center gap-2 px-5 py-3.5 rounded-2xl bg-white hover:bg-slate-50 text-slate-700 font-medium text-sm border border-slate-200/90 shadow-xs hover:border-slate-300 active:scale-[0.98] transition-all"
+          <button
+            type="button"
+            onClick={() => openLevelModal(null, "reflex")}
+            className="inline-flex items-center justify-center gap-2 px-5 py-3.5 rounded-2xl bg-white hover:bg-slate-50 text-slate-700 font-medium text-sm border border-slate-200/90 shadow-xs hover:border-slate-300 active:scale-[0.98] transition-all cursor-pointer"
           >
             <Zap className="w-4 h-4 text-amber-500 fill-amber-500" />
             <span>Luyện phản xạ 60s</span>
-          </Link>
+          </button>
         </div>
       </div>
 
@@ -219,7 +236,13 @@ export default function HomePage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {decks.map((deck) => {
+            {decks
+              .filter(
+                (d) =>
+                  d.is_system ||
+                  (user ? d.user_id === user.id : d.user_id === "local_guest")
+              )
+              .map((deck) => {
               const Icon = getDeckIcon(deck.icon);
               const deckCards = cards.filter((c) => c.deck_id === deck.id);
               const deckLearned = deckCards.filter(
@@ -232,7 +255,8 @@ export default function HomePage() {
               return (
                 <div
                   key={deck.id}
-                  className="bg-white border border-slate-200/80 hover:border-brand-200 hover:shadow-sm rounded-2xl p-5 transition-all flex flex-col justify-between gap-4"
+                  onClick={() => openLevelModal(deck, "study")}
+                  className="bg-white border border-slate-200/80 hover:border-brand-200 hover:shadow-sm rounded-2xl p-5 transition-all flex flex-col justify-between gap-4 cursor-pointer group"
                 >
                   <div className="flex items-start gap-3.5">
                     <div className="w-11 h-11 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center shrink-0">
@@ -264,15 +288,36 @@ export default function HomePage() {
                     </div>
                   </div>
 
-                  {/* Action */}
-                  <div className="pt-2 flex items-center justify-end">
-                    <Link
-                      href={`/study?deck=${deck.id}`}
-                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-brand-50 hover:bg-brand-500 text-brand-600 hover:text-white font-medium text-xs transition-colors"
+                  {/* CEFR Level Tags & Action */}
+                  <div className="pt-2 flex items-center justify-between gap-2 border-t border-slate-100">
+                    <div className="flex items-center gap-1 flex-wrap">
+                      {CEFR_LEVEL_LIST.map((lvl) => {
+                        const count = deckCards.filter((c) => (c.level || "B1") === lvl).length;
+                        const meta = CEFR_LEVELS_META[lvl];
+                        return (
+                          <span
+                            key={lvl}
+                            className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md border ${
+                              count > 0
+                                ? meta.badgeClass
+                                : "bg-slate-50 text-slate-300 border-slate-100"
+                            }`}
+                            title={`${meta.nameVi}: ${count} câu`}
+                          >
+                            {lvl}
+                          </span>
+                        );
+                      })}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => openLevelModal(deck, "study")}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-brand-50 hover:bg-brand-500 text-brand-600 hover:text-white font-semibold text-xs transition-colors shadow-2xs cursor-pointer shrink-0"
                     >
                       <span>Học ngay</span>
                       <ArrowRight className="w-3.5 h-3.5" />
-                    </Link>
+                    </button>
                   </div>
                 </div>
               );
@@ -280,6 +325,15 @@ export default function HomePage() {
           </div>
         )}
       </div>
+
+      {/* CEFR Level Selector Modal */}
+      <LevelSelectorModal
+        isOpen={isLevelModalOpen}
+        onClose={() => setIsLevelModalOpen(false)}
+        deck={selectedDeckForLevel}
+        cards={cards}
+        targetMode={levelModalMode}
+      />
     </div>
   );
 }

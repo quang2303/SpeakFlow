@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
@@ -34,7 +34,14 @@ import {
   UserProfile,
 } from "@/lib/dataService";
 import AccountLockScreen from "@/components/AccountLockScreen";
-import { Card, Deck } from "@/lib/seedData";
+import {
+  Card,
+  CEFR_LEVEL_LIST,
+  CEFR_LEVELS_META,
+  CEFRLevel,
+  Deck,
+  getLevelBadgeColor,
+} from "@/lib/seedData";
 import {
   generateFirstLetterHint,
   getRatingPreviewLabel,
@@ -226,13 +233,28 @@ function PronunciationFeedbackPanel({
   );
 }
 
+function fisherYatesShuffle<T>(arr: T[]): T[] {
+  const copy = [...arr];
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+}
+
 function StudySessionContent() {
   const searchParams = useSearchParams();
-  const initialDeckParam = searchParams.get("deck") || "all";
+  const initialDeckParam =
+    searchParams.get("deck") || searchParams.get("deck_id") || "all";
+  const initialLevelParam =
+    (searchParams.get("level") as CEFRLevel | "all") || "all";
 
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [decks, setDecks] = useState<Deck[]>([]);
   const [selectedDeckId, setSelectedDeckId] = useState<string>(initialDeckParam);
+  const [selectedLevel, setSelectedLevel] =
+    useState<CEFRLevel | "all">(initialLevelParam);
+  const [deckCards, setDeckCards] = useState<Card[]>([]);
   const [studyQueue, setStudyQueue] = useState<Card[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
@@ -262,6 +284,18 @@ function StudySessionContent() {
     setSpeechError(null);
   }, []);
 
+  const levelCounts = useMemo(() => {
+    const counts: Record<string, number> = { all: deckCards.length };
+    for (const lvl of CEFR_LEVEL_LIST) {
+      counts[lvl] = 0;
+    }
+    for (const card of deckCards) {
+      const lvl = card.level || "B1";
+      counts[lvl] = (counts[lvl] || 0) + 1;
+    }
+    return counts;
+  }, [deckCards]);
+
   const loadStudyCards = useCallback(async () => {
     setLoading(true);
     const [allDecks, fetchedCards] = await Promise.all([
@@ -269,9 +303,20 @@ function StudySessionContent() {
       getCards(selectedDeckId === "all" ? undefined : selectedDeckId),
     ]);
     setDecks(allDecks);
+    setDeckCards(fetchedCards);
 
-    const due = fetchedCards.filter((c) => isCardDue(c));
-    const queue = due.length > 0 ? due : fetchedCards;
+    let pool = fetchedCards;
+    if (selectedLevel !== "all") {
+      pool = fetchedCards.filter((c) => (c.level || "B1") === selectedLevel);
+      if (pool.length === 0) {
+        pool = fetchedCards;
+      }
+    } else {
+      pool = fisherYatesShuffle(fetchedCards);
+    }
+
+    const due = pool.filter((c) => isCardDue(c));
+    const queue = due.length > 0 ? due : pool;
 
     setStudyQueue(queue);
     setCurrentIndex(0);
@@ -280,7 +325,7 @@ function StudySessionContent() {
     setSessionFinished(false);
     resetSpeechState();
     setLoading(false);
-  }, [selectedDeckId, resetSpeechState]);
+  }, [selectedDeckId, selectedLevel, resetSpeechState]);
 
   useEffect(() => {
     return () => {
@@ -306,12 +351,20 @@ function StudySessionContent() {
         selectedDeckId === "all"
           ? local.cards
           : local.cards.filter((c) => c.deck_id === selectedDeckId);
-      const due = filtered.filter((c) => isCardDue(c));
-      setStudyQueue(due.length > 0 ? due : filtered);
+      setDeckCards(filtered);
+      let pool = filtered;
+      if (selectedLevel !== "all") {
+        pool = filtered.filter((c) => (c.level || "B1") === selectedLevel);
+        if (pool.length === 0) pool = filtered;
+      } else {
+        pool = fisherYatesShuffle(filtered);
+      }
+      const due = pool.filter((c) => isCardDue(c));
+      setStudyQueue(due.length > 0 ? due : pool);
     };
     window.addEventListener("speakflow-auth-changed", handler);
     return () => window.removeEventListener("speakflow-auth-changed", handler);
-  }, [loadStudyCards, selectedDeckId]);
+  }, [loadStudyCards, selectedDeckId, selectedLevel]);
 
   const currentCard = studyQueue[currentIndex];
   const currentDeck = decks.find((d) => d.id === currentCard?.deck_id);
@@ -493,6 +546,15 @@ function StudySessionContent() {
   ]);
 
   function handleRestartSession() {
+    let pool = deckCards;
+    if (selectedLevel !== "all") {
+      pool = deckCards.filter((c) => (c.level || "B1") === selectedLevel);
+      if (pool.length === 0) pool = deckCards;
+    } else {
+      pool = fisherYatesShuffle(deckCards);
+    }
+    const due = pool.filter((c) => isCardDue(c));
+    setStudyQueue(due.length > 0 ? due : pool);
     setCurrentIndex(0);
     setIsFlipped(false);
     setShowHint(false);
@@ -587,18 +649,81 @@ function StudySessionContent() {
             aria-label="Chọn bộ chủ đề"
             className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2 text-xs sm:text-sm font-semibold text-slate-800 focus:outline-none focus:border-brand-500 shadow-xs truncate"
           >
-            <option value="all">Tất cả chủ đề ({totalCards} thẻ)</option>
-            {decks.map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.title}
-              </option>
-            ))}
+            <option value="all">Tất cả chủ đề ({deckCards.length} thẻ)</option>
+            {decks
+              .filter(
+                (d) =>
+                  d.is_system ||
+                  (currentUser
+                    ? d.user_id === currentUser.id
+                    : d.user_id === "local_guest")
+              )
+              .map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.title}
+                </option>
+              ))}
           </select>
         </div>
 
         <div className="px-3.5 py-2 rounded-xl bg-brand-50 border border-brand-100 text-xs sm:text-sm font-bold text-brand-700 shrink-0">
           Thẻ {currentIndex + 1} / {totalCards}
         </div>
+      </div>
+
+      {/* CEFR Level Quick Filter Bar */}
+      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none text-xs">
+        <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 shrink-0 mr-1 flex items-center gap-1">
+          <Sparkles className="w-3.5 h-3.5 text-brand-500" />
+          Trình độ:
+        </span>
+        <button
+          type="button"
+          onClick={() => setSelectedLevel("all")}
+          className={`shrink-0 px-3 py-1.5 rounded-xl font-bold transition-all flex items-center gap-1.5 ${
+            selectedLevel === "all"
+              ? "bg-brand-600 text-white shadow-xs"
+              : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
+          }`}
+        >
+          <span>🎲 Lộn xộn</span>
+          <span className="text-[10px] opacity-80 font-normal">({deckCards.length})</span>
+        </button>
+
+        {CEFR_LEVEL_LIST.map((lvl) => {
+          const count = levelCounts[lvl] || 0;
+          const isSelected = selectedLevel === lvl;
+          const isDisabled = count === 0;
+          const meta = CEFR_LEVELS_META[lvl];
+          return (
+            <button
+              key={lvl}
+              type="button"
+              disabled={isDisabled}
+              onClick={() => setSelectedLevel(lvl)}
+              title={`${meta.nameVi} (${meta.nameEn}) - ${count} câu`}
+              className={`shrink-0 px-2.5 py-1.5 rounded-xl font-bold transition-all flex items-center gap-1.5 ${
+                isSelected
+                  ? "bg-slate-900 text-white shadow-xs ring-2 ring-brand-400"
+                  : isDisabled
+                  ? "bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed opacity-50"
+                  : "bg-white text-slate-700 hover:bg-slate-50 border border-slate-200"
+              }`}
+            >
+              <span
+                className={`px-1.5 py-0.5 rounded text-[10px] font-black ${
+                  isSelected ? "bg-white/20 text-white" : getLevelBadgeColor(lvl)
+                }`}
+              >
+                {lvl}
+              </span>
+              <span className="hidden sm:inline font-medium text-[11px]">
+                {meta.nameVi}
+              </span>
+              <span className="text-[10px] opacity-75 font-normal">({count})</span>
+            </button>
+          );
+        })}
       </div>
 
       {/* Progress Bar */}
@@ -627,12 +752,23 @@ function StudySessionContent() {
                   /* FRONT SIDE: ACTIVE RECALL */
                   <div className="min-h-[400px] md:min-h-[440px] rounded-3xl bg-white border border-slate-200/90 p-6 md:p-8 flex flex-col justify-between shadow-sm">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-brand-50 text-brand-700 border border-brand-100">
-                        <Layers className="w-3.5 h-3.5" />
-                        {currentDeck?.title || "Giao tiếp thực tế"}
-                      </span>
-                      <span className="text-xs font-medium text-slate-500 bg-slate-100 px-3 py-1 rounded-full">
-                        Hộp ghi nhớ {currentCard.box}/5
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-brand-50 text-brand-700 border border-brand-100">
+                          <Layers className="w-3.5 h-3.5" />
+                          {currentDeck?.title || "Giao tiếp thực tế"}
+                        </span>
+                        {currentCard.level && (
+                          <span
+                            className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold border ${getLevelBadgeColor(
+                              currentCard.level
+                            )}`}
+                          >
+                            {currentCard.level} • {CEFR_LEVELS_META[currentCard.level]?.nameVi || "Cơ bản"}
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-xs font-medium text-slate-500 bg-slate-100 px-3 py-1 rounded-full shrink-0">
+                        Hộp {currentCard.box}/5
                       </span>
                     </div>
 
@@ -694,10 +830,21 @@ function StudySessionContent() {
                 ) : (
                   /* BACK SIDE: ANSWER & SHADOWING */
                   <div className="min-h-[400px] md:min-h-[440px] rounded-3xl bg-white border border-brand-200 p-6 md:p-8 space-y-5 shadow-sm">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold uppercase tracking-wider text-brand-600">
-                        Đáp án & Mẫu câu
-                      </span>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs font-bold uppercase tracking-wider text-brand-600">
+                          Đáp án & Mẫu câu
+                        </span>
+                        {currentCard.level && (
+                          <span
+                            className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${getLevelBadgeColor(
+                              currentCard.level
+                            )}`}
+                          >
+                            Trình độ {currentCard.level} • {CEFR_LEVELS_META[currentCard.level]?.nameVi}
+                          </span>
+                        )}
+                      </div>
                       <button
                         type="button"
                         onClick={() => setIsFlipped(false)}

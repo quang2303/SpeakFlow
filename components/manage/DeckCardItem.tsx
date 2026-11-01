@@ -32,6 +32,7 @@ interface DeckCardItemProps {
   cardCount: number;
   isOwner: boolean;
   isAdmin: boolean;
+  onStudy?: (deck: Deck) => void;
   onClone?: (deck: Deck) => void;
   onDelete?: (deck: Deck) => void;
   onToggleShare?: (deck: Deck, nextPublic: boolean) => void;
@@ -59,6 +60,7 @@ export default function DeckCardItem({
   cardCount,
   isOwner,
   isAdmin,
+  onStudy,
   onClone,
   onDelete,
   onToggleShare,
@@ -156,13 +158,24 @@ export default function DeckCardItem({
       {/* Action Footer */}
       <div className="pt-4 mt-4 border-t border-slate-100 flex items-center justify-between gap-2">
         {/* Study Button */}
-        <Link
-          href={`/study?deck_id=${deck.id}`}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-brand-50 hover:bg-brand-100 text-brand-700 text-xs font-semibold border border-brand-200/60 transition-colors"
-        >
-          <Play className="w-3.5 h-3.5 fill-brand-600 text-brand-600" />
-          <span>Học ngay</span>
-        </Link>
+        {onStudy ? (
+          <button
+            type="button"
+            onClick={() => onStudy(deck)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-brand-50 hover:bg-brand-100 text-brand-700 text-xs font-semibold border border-brand-200/60 transition-colors cursor-pointer"
+          >
+            <Play className="w-3.5 h-3.5 fill-brand-600 text-brand-600" />
+            <span>Học ngay</span>
+          </button>
+        ) : (
+          <Link
+            href={`/study?deck=${deck.id}`}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-brand-50 hover:bg-brand-100 text-brand-700 text-xs font-semibold border border-brand-200/60 transition-colors"
+          >
+            <Play className="w-3.5 h-3.5 fill-brand-600 text-brand-600" />
+            <span>Học ngay</span>
+          </Link>
+        )}
 
         <div className="flex items-center gap-1">
           {/* Share Link button if owner or public */}

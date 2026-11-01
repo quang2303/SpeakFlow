@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   Flame,
   Mic,
@@ -27,7 +28,7 @@ import {
   UserProfile,
 } from "@/lib/dataService";
 import AccountLockScreen from "@/components/AccountLockScreen";
-import { Card } from "@/lib/seedData";
+import { Card, CEFR_LEVELS_META, getLevelBadgeColor } from "@/lib/seedData";
 import {
   evaluatePronunciation,
   MicVisualState,
@@ -62,7 +63,11 @@ function shuffleCards(arr: Card[]): Card[] {
   return copy;
 }
 
-export default function ReflexDrillPage() {
+function ReflexDrillContent() {
+  const searchParams = useSearchParams();
+  const deckParam = searchParams.get("deck") || searchParams.get("deck_id");
+  const levelParam = searchParams.get("level");
+
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [allCards, setAllCards] = useState<Card[]>([]);
   const [drillCards, setDrillCards] = useState<Card[]>([]);
@@ -96,13 +101,26 @@ export default function ReflexDrillPage() {
 
   useEffect(() => {
     setCurrentUser(getStoredUserProfile());
-    setAllCards(getInitialLocalData().cards);
+    let initial = getInitialLocalData().cards;
+    if (deckParam && deckParam !== "all") {
+      initial = initial.filter((c) => c.deck_id === deckParam);
+    }
+    if (levelParam && levelParam !== "all") {
+      initial = initial.filter((c) => (c.level || "B1") === levelParam);
+    }
+    setAllCards(initial);
+
     async function load() {
-      const cards = await getCards();
+      let cards = await getCards(
+        deckParam && deckParam !== "all" ? deckParam : undefined
+      );
+      if (levelParam && levelParam !== "all") {
+        cards = cards.filter((c) => (c.level || "B1") === levelParam);
+      }
       setAllCards(cards);
     }
     void load();
-  }, []);
+  }, [deckParam, levelParam]);
 
   const finishDrill = useCallback(async () => {
     recognizerRef.current?.stop();
@@ -494,11 +512,22 @@ export default function ReflexDrillPage() {
                 </div>
               )}
 
-              <div className="text-center space-y-2">
-                <span className="text-xs font-bold uppercase tracking-wider text-amber-600">
-                  Hãy nói bằng tiếng Anh ngay!
-                </span>
-                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-bold uppercase tracking-wider text-amber-600">
+                    Hãy nói bằng tiếng Anh ngay!
+                  </span>
+                  {currentCard.level && (
+                    <span
+                      className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold border ${getLevelBadgeColor(
+                        currentCard.level
+                      )}`}
+                    >
+                      {currentCard.level} • {CEFR_LEVELS_META[currentCard.level]?.nameVi || "Cơ bản"}
+                    </span>
+                  )}
+                </div>
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 text-center">
                   <p className="text-xl md:text-2xl font-bold text-slate-900 leading-snug">
                     &ldquo;{currentCard.sentence_vi}&rdquo;
                   </p>
@@ -705,9 +734,20 @@ export default function ReflexDrillPage() {
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="space-y-2 flex-1">
-                      <p className="text-xs text-slate-500">
-                        {item.card.sentence_vi}
-                      </p>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="text-xs text-slate-500">
+                          {item.card.sentence_vi}
+                        </p>
+                        {item.card.level && (
+                          <span
+                            className={`inline-flex items-center px-1.5 py-0.2 rounded text-[10px] font-bold border ${getLevelBadgeColor(
+                              item.card.level
+                            )}`}
+                          >
+                            {item.card.level}
+                          </span>
+                        )}
+                      </div>
 
                       <div className="flex flex-wrap items-start gap-2 pt-0.5">
                         {item.words.map((wb, wIdx) => {
@@ -779,5 +819,20 @@ export default function ReflexDrillPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function ReflexDrillPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="px-4 md:px-8 pt-6 space-y-4 max-w-5xl mx-auto">
+          <div className="h-8 w-48 bg-slate-200 rounded-xl animate-pulse" />
+          <div className="h-96 w-full bg-white rounded-3xl border border-slate-200 animate-pulse" />
+        </div>
+      }
+    >
+      <ReflexDrillContent />
+    </Suspense>
   );
 }

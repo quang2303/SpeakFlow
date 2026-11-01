@@ -45,10 +45,20 @@ import {
   UserProfile,
 } from "@/lib/dataService";
 import AccountLockScreen from "@/components/AccountLockScreen";
-import { Card, Deck, isSystemDeck, isSystemCard } from "@/lib/seedData";
+import {
+  Card,
+  Deck,
+  CEFRLevel,
+  CEFR_LEVELS_META,
+  CEFR_LEVEL_LIST,
+  getLevelBadgeColor,
+  isSystemDeck,
+  isSystemCard,
+} from "@/lib/seedData";
 import { speakEnglish } from "@/lib/speech";
 import CreateDeckModal from "@/components/manage/CreateDeckModal";
 import DeckCardItem from "@/components/manage/DeckCardItem";
+import LevelSelectorModal from "@/components/LevelSelectorModal";
 
 const SAMPLE_JSON_IMPORT = JSON.stringify(
   [
@@ -60,6 +70,7 @@ const SAMPLE_JSON_IMPORT = JSON.stringify(
       sentence_vi: "Đừng lo, chúng ta sẽ cùng nhau tìm ra cách giải quyết.",
       context_note:
         "Dùng để trấn an đồng nghiệp hoặc bạn bè khi gặp vấn đề khó.",
+      level: "B1",
     },
     {
       phrase_en: "give it a shot",
@@ -69,15 +80,16 @@ const SAMPLE_JSON_IMPORT = JSON.stringify(
       sentence_vi:
         "Tôi chưa từng lướt ván bao giờ, nhưng tôi sẽ thử một phen xem sao!",
       context_note: "Tự nhiên hơn rất nhiều so với 'I will try it'.",
+      level: "A2",
     },
   ],
   null,
   2
 );
 
-const SAMPLE_CSV_IMPORT = `phrase_en,ipa,meaning_vi,sentence_en,sentence_vi,context_note
-count me in,/kaʊnt mi ɪn/,cho tôi tham gia với,Are you guys going for karaoke? Count me in!,Mọi người đi hát karaoke hả? Cho tôi tham gia với nhé!,Dùng khi muốn hưởng ứng lời rủ rê của bạn bè ngay lập tức.
-on my way,/ɑːn maɪ weɪ/,đang trên đường tới rồi,Hang on five minutes, I'm on my way!,Đợi 5 phút nhé, tôi đang trên đường tới rồi!,Câu trả lời cực nhanh khi bạn bè hỏi bạn đang ở đâu.`;
+const SAMPLE_CSV_IMPORT = `phrase_en,ipa,meaning_vi,sentence_en,sentence_vi,context_note,level
+count me in,/kaʊnt mi ɪn/,cho tôi tham gia với,Are you guys going for karaoke? Count me in!,Mọi người đi hát karaoke hả? Cho tôi tham gia với nhé!,Dùng khi muốn hưởng ứng lời rủ rê của bạn bè ngay lập tức.,A2
+on my way,/ɑːn maɪ weɪ/,đang trên đường tới rồi,Hang on five minutes, I'm on my way!,Đợi 5 phút nhé, tôi đang trên đường tới rồi!,Câu trả lời cực nhanh khi bạn bè hỏi bạn đang ở đâu.,A1`;
 
 function parseCsvBatch(csvText: string) {
   const lines = csvText
@@ -92,14 +104,18 @@ function parseCsvBatch(csvText: string) {
   for (let i = startIndex; i < lines.length; i++) {
     const parts = lines[i].split(",").map((p) => p.trim());
     if (parts.length >= 5) {
+      const candidateLevel = parts[6]?.trim().toUpperCase();
+      const validLevel: CEFRLevel = ["A1", "A2", "B1", "B2", "C1", "C2"].includes(candidateLevel)
+        ? (candidateLevel as CEFRLevel)
+        : "B1";
       results.push({
         phrase_en: parts[0],
         ipa: parts[1] || "/.../",
         meaning_vi: parts[2],
         sentence_en: parts[3],
         sentence_vi: parts[4],
-        context_note:
-          parts.slice(5).join(", ") || "Mẫu câu phản xạ tự thêm.",
+        context_note: parts[5] || "Mẫu câu phản xạ tự thêm.",
+        level: validLevel,
       });
     }
   }
@@ -133,6 +149,7 @@ export default function ManageCardsPage() {
   const [sentenceEn, setSentenceEn] = useState("");
   const [sentenceVi, setSentenceVi] = useState("");
   const [contextNote, setContextNote] = useState("");
+  const [cardLevel, setCardLevel] = useState<CEFRLevel>("B1");
 
   // Batch Import State
   const [batchFormat, setBatchFormat] = useState<"json" | "csv">("json");
@@ -141,6 +158,11 @@ export default function ManageCardsPage() {
   // Search / Filter for Card List
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedDeckFilter, setSelectedDeckFilter] = useState<string>("all");
+  const [selectedLevelFilter, setSelectedLevelFilter] = useState<string>("all");
+
+  // Level Selector Modal state
+  const [selectedDeckForLevel, setSelectedDeckForLevel] = useState<Deck | null>(null);
+  const [isLevelModalOpen, setIsLevelModalOpen] = useState(false);
 
   const refreshData = useCallback(async () => {
     const [loadedDecks, loadedCards] = await Promise.all([
@@ -175,12 +197,14 @@ export default function ManageCardsPage() {
 
   const isAdmin = currentUser?.role === "admin";
 
-  // Decks partitioned by ownership
+  // Decks partitioned by ownership & privacy
   const myDecks = useMemo(() => {
     return decks.filter(
       (d) =>
         !d.is_system &&
-        (d.user_id === currentUser?.id || (!currentUser && !d.user_id))
+        (currentUser
+          ? d.user_id === currentUser.id
+          : d.user_id === "local_guest")
     );
   }, [decks, currentUser]);
 
@@ -193,7 +217,7 @@ export default function ManageCardsPage() {
       (d) =>
         !d.is_system &&
         d.is_public &&
-        d.user_id !== currentUser?.id
+        (!currentUser || d.user_id !== currentUser.id)
     );
   }, [decks, currentUser]);
 
@@ -250,6 +274,7 @@ export default function ManageCardsPage() {
       sentence_vi: sentenceVi.trim(),
       context_note:
         contextNote.trim() || "Mẫu câu thực chiến tự thêm.",
+      level: cardLevel,
     });
 
     setPhraseEn("");
@@ -258,6 +283,7 @@ export default function ManageCardsPage() {
     setSentenceEn("");
     setSentenceVi("");
     setContextNote("");
+    setCardLevel("B1");
 
     await refreshData();
     showToast("Đã thêm mẫu câu thành công vào kho của bạn!");
@@ -383,6 +409,10 @@ export default function ManageCardsPage() {
       list = list.filter((c) => c.deck_id === selectedDeckFilter);
     }
 
+    if (selectedLevelFilter !== "all") {
+      list = list.filter((c) => (c.level || "B1") === selectedLevelFilter);
+    }
+
     if (!searchQuery.trim()) return list;
     const q = searchQuery.toLowerCase();
     return list.filter(
@@ -392,7 +422,7 @@ export default function ManageCardsPage() {
         c.sentence_vi.toLowerCase().includes(q) ||
         c.meaning_vi.toLowerCase().includes(q)
     );
-  }, [mainTab, cards, myDecks, communityDecks, currentUser, selectedDeckFilter, searchQuery]);
+  }, [mainTab, cards, myDecks, communityDecks, currentUser, selectedDeckFilter, selectedLevelFilter, searchQuery]);
 
   if (currentUser?.status === "locked") {
     return <AccountLockScreen user={currentUser} />;
@@ -688,17 +718,36 @@ export default function ManageCardsPage() {
                   />
                 </div>
 
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                    Ghi chú ngữ cảnh
-                  </label>
-                  <input
-                    type="text"
-                    value={contextNote}
-                    onChange={(e) => setContextNote(e.target.value)}
-                    placeholder="VD: Cụm từ rất chuộng trong phỏng vấn và họp hành."
-                    className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-sm text-slate-900 focus:outline-hidden focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
-                  />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                      Trình độ CEFR *
+                    </label>
+                    <select
+                      value={cardLevel}
+                      onChange={(e) => setCardLevel(e.target.value as CEFRLevel)}
+                      className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-900 bg-white focus:outline-hidden focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
+                    >
+                      {CEFR_LEVEL_LIST.map((lvl) => (
+                        <option key={lvl} value={lvl}>
+                          {lvl} - {CEFR_LEVELS_META[lvl].nameVi} ({CEFR_LEVELS_META[lvl].nameEn})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                      Ghi chú ngữ cảnh
+                    </label>
+                    <input
+                      type="text"
+                      value={contextNote}
+                      onChange={(e) => setContextNote(e.target.value)}
+                      placeholder="VD: Cụm từ rất chuộng trong phỏng vấn và họp hành."
+                      className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-sm text-slate-900 focus:outline-hidden focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
+                    />
+                  </div>
                 </div>
 
                 <div className="pt-2 flex justify-end gap-2">
@@ -858,6 +907,10 @@ export default function ManageCardsPage() {
                     cardCount={count}
                     isOwner={true}
                     isAdmin={isAdmin}
+                    onStudy={(d) => {
+                      setSelectedDeckForLevel(d);
+                      setIsLevelModalOpen(true);
+                    }}
                     onDelete={handleDeleteDeck}
                     onToggleShare={handleToggleShare}
                     onCopyLinkSuccess={(link) =>
@@ -902,6 +955,10 @@ export default function ManageCardsPage() {
                   cardCount={count}
                   isOwner={false}
                   isAdmin={isAdmin}
+                  onStudy={(d) => {
+                    setSelectedDeckForLevel(d);
+                    setIsLevelModalOpen(true);
+                  }}
                   onClone={handleCloneDeck}
                   onCopyLinkSuccess={(link) =>
                     showToast(`Đã sao chép link chia sẻ: ${link}`)
@@ -952,6 +1009,10 @@ export default function ManageCardsPage() {
                     cardCount={count}
                     isOwner={false}
                     isAdmin={isAdmin}
+                    onStudy={(d) => {
+                      setSelectedDeckForLevel(d);
+                      setIsLevelModalOpen(true);
+                    }}
                     onClone={handleCloneDeck}
                     onCopyLinkSuccess={(link) =>
                       showToast(`Đã sao chép link chia sẻ: ${link}`)
@@ -983,10 +1044,29 @@ export default function ManageCardsPage() {
               className="px-3 py-1.5 rounded-xl border border-slate-200 text-xs text-slate-800 bg-white"
             >
               <option value="all">Tất cả chủ đề</option>
-              {decks.map((d) => (
+              {(mainTab === "my-decks"
+                ? myDecks
+                : mainTab === "system-decks"
+                ? systemDecks
+                : communityDecks
+              ).map((d) => (
                 <option key={d.id} value={d.id}>
                   {d.is_system ? "🏛️ " : "📂 "}
                   {d.title}
+                </option>
+              ))}
+            </select>
+
+            {/* Filter by CEFR Level */}
+            <select
+              value={selectedLevelFilter}
+              onChange={(e) => setSelectedLevelFilter(e.target.value)}
+              className="px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-800 bg-white"
+            >
+              <option value="all">Tất cả trình độ CEFR</option>
+              {CEFR_LEVEL_LIST.map((lvl) => (
+                <option key={lvl} value={lvl}>
+                  {lvl} - {CEFR_LEVELS_META[lvl].nameVi}
                 </option>
               ))}
             </select>
@@ -1014,6 +1094,7 @@ export default function ManageCardsPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
             {visibleCards.map((card) => {
               const isSys = isSystemCard(card) || isSystemDeck(card.deck_id);
+              const badgeMeta = getLevelBadgeColor(card.level);
               return (
                 <div
                   key={card.id}
@@ -1022,9 +1103,16 @@ export default function ManageCardsPage() {
                   <div className="space-y-1.5">
                     <div className="flex items-start justify-between gap-2">
                       <div>
-                        <h4 className="text-sm font-bold text-emerald-600">
-                          {card.phrase_en}
-                        </h4>
+                        <div className="flex items-center gap-2">
+                          <h4 className="text-sm font-bold text-emerald-600">
+                            {card.phrase_en}
+                          </h4>
+                          <span
+                            className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md border ${badgeMeta.bg} ${badgeMeta.text} ${badgeMeta.border}`}
+                          >
+                            {card.level || "B1"}
+                          </span>
+                        </div>
                         <p className="text-xs text-slate-400 font-mono">
                           {card.ipa}
                         </p>
@@ -1089,6 +1177,15 @@ export default function ManageCardsPage() {
           showToast(`Đã tạo thành công bộ thẻ "${newDeck.title}"!`);
           setMainTab("my-decks");
         }}
+      />
+
+      {/* LEVEL SELECTOR MODAL */}
+      <LevelSelectorModal
+        isOpen={isLevelModalOpen}
+        onClose={() => setIsLevelModalOpen(false)}
+        deck={selectedDeckForLevel}
+        cards={cards}
+        targetMode="study"
       />
     </div>
   );

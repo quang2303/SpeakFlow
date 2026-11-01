@@ -23,8 +23,9 @@ import {
   getDeckWithCards,
   getStoredUserProfile,
 } from "@/lib/dataService";
-import { Card, Deck } from "@/lib/seedData";
+import { Card, Deck, getLevelBadgeColor } from "@/lib/seedData";
 import { speakEnglish } from "@/lib/speech";
+import LevelSelectorModal from "@/components/LevelSelectorModal";
 
 export default function SharedDeckPage() {
   const params = useParams();
@@ -38,6 +39,7 @@ export default function SharedDeckPage() {
   const [copied, setCopied] = useState(false);
   const [playingWord, setPlayingWord] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [isLevelModalOpen, setIsLevelModalOpen] = useState(false);
 
   useEffect(() => {
     async function loadShared() {
@@ -205,13 +207,14 @@ export default function SharedDeckPage() {
 
             {/* Action Buttons */}
             <div className="flex items-center gap-2.5 flex-wrap">
-              <Link
-                href={`/study?deck_id=${deck.id}`}
-                className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold transition-colors"
+              <button
+                type="button"
+                onClick={() => setIsLevelModalOpen(true)}
+                className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold transition-colors cursor-pointer"
               >
                 <Play className="w-4 h-4 fill-slate-700 text-slate-700" />
                 <span>Học thử ngay</span>
-              </Link>
+              </button>
 
               <button
                 type="button"
@@ -252,9 +255,20 @@ export default function SharedDeckPage() {
               <div className="space-y-1.5">
                 <div className="flex items-start justify-between gap-2">
                   <div>
-                    <h3 className="text-sm font-bold text-emerald-600">
-                      {card.phrase_en}
-                    </h3>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-sm font-bold text-emerald-600">
+                        {card.phrase_en}
+                      </h3>
+                      {card.level && (
+                        <span
+                          className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md border ${getLevelBadgeColor(
+                            card.level
+                          )}`}
+                        >
+                          {card.level}
+                        </span>
+                      )}
+                    </div>
                     <p className="text-xs text-slate-400 font-mono">
                       {card.ipa}
                     </p>
@@ -289,6 +303,14 @@ export default function SharedDeckPage() {
           ))}
         </div>
       </div>
+
+      <LevelSelectorModal
+        isOpen={isLevelModalOpen}
+        onClose={() => setIsLevelModalOpen(false)}
+        deck={deck}
+        cards={cards}
+        targetMode="study"
+      />
     </div>
   );
 }
