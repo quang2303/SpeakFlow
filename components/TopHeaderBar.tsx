@@ -32,9 +32,11 @@ export default function TopHeaderBar() {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [currentTheme, setCurrentTheme] = useState<string>("emerald");
   const [streak, setStreak] = useState<StreakData>({
-    currentStreak: 1,
+    currentStreak: 0,
     lastStudyDate: null,
     todayReviewedCount: 0,
+    isStreakActiveToday: false,
+    streakStatus: "broken",
   });
 
   const syncState = useCallback(() => {
@@ -136,10 +138,28 @@ export default function TopHeaderBar() {
 
           {/* Daily Streak Pill */}
           <div
-            className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full bg-amber-50 border border-amber-200/70 text-amber-700 text-xs font-semibold shadow-xs shrink-0"
-            title={`Chuỗi học: ${streak.currentStreak} ngày liên tiếp`}
+            className={`inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full text-xs font-semibold shadow-xs shrink-0 transition-all ${
+              streak.currentStreak > 0
+                ? streak.streakStatus === "active_today"
+                  ? "bg-amber-50 border border-amber-200/70 text-amber-700"
+                  : "bg-amber-100/90 border border-amber-300 text-amber-900 ring-2 ring-amber-400/40 animate-pulse"
+                : "bg-slate-100 border border-slate-200 text-slate-500"
+            }`}
+            title={
+              streak.currentStreak > 0
+                ? streak.streakStatus === "active_today"
+                  ? `Chuỗi học: ${streak.currentStreak} ngày liên tiếp (Đã học hôm nay)`
+                  : `⚠️ Cảnh báo chuỗi ${streak.currentStreak} ngày: Chưa học hôm nay! Học ngay trước 24:00 để không mất chuỗi.`
+                : "Chuỗi học: 0 ngày. Hoàn thành 1 câu ngay để bắt đầu chuỗi ngày liên tiếp!"
+            }
           >
-            <Flame className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
+            <Flame
+              className={`w-3.5 h-3.5 ${
+                streak.currentStreak > 0
+                  ? "text-amber-500 fill-amber-500"
+                  : "text-slate-400"
+              }`}
+            />
             <span>
               {streak.currentStreak}
               <span className="hidden sm:inline"> ngày</span>

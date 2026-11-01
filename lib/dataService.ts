@@ -32,6 +32,8 @@ export interface StreakData {
   currentStreak: number;
   lastStudyDate: string | null; // YYYY-MM-DD
   todayReviewedCount: number;
+  isStreakActiveToday?: boolean;
+  streakStatus?: "active_today" | "at_risk" | "broken";
 }
 
 export type UserRole = "admin" | "student";
@@ -1733,11 +1735,13 @@ export function getAllUsersForAdmin(): AdminStudentMetrics[] {
           new Date(Date.now() - 2 * 3600 * 1000).toISOString(); // 2 hours ago
       } else if (demoPreset.email === "bikhoa@speakflow.vn") {
         totalMinutes = 35;
+        streak = 0; // Inactive for 6 days -> streak lost
         lastActiveAt = new Date(
           Date.now() - 6 * 24 * 3600 * 1000
         ).toISOString(); // 6 days ago
       } else if (demoPreset.email === "thutrang@speakflow.vn") {
         totalMinutes = 110;
+        streak = 0; // Inactive for 5 days -> streak lost
         lastActiveAt = new Date(
           Date.now() - 5 * 24 * 3600 * 1000
         ).toISOString(); // 5 days ago
@@ -2203,7 +2207,7 @@ export async function syncUserProgressWithCloud(
 
       if (remoteStats) {
         const remoteDate: string | null = remoteStats.last_study_date || null;
-        const remoteStreakCount: number = remoteStats.current_streak || 1;
+        const remoteStreakCount: number = Math.max(0, remoteStats.current_streak || 0);
         const remoteTodayCount: number = remoteStats.today_reviewed_count || 0;
 
         if (remoteDate === today && localStreak.lastStudyDate === today) {
@@ -2217,37 +2221,50 @@ export async function syncUserProgressWithCloud(
               localStreak.todayReviewedCount,
               remoteTodayCount
             ),
+            isStreakActiveToday: true,
+            streakStatus: "active_today",
           };
         } else if (remoteDate === today) {
           mergedStreak = {
             currentStreak: remoteStreakCount,
             lastStudyDate: today,
             todayReviewedCount: remoteTodayCount,
+            isStreakActiveToday: true,
+            streakStatus: "active_today",
           };
         } else if (localStreak.lastStudyDate === today) {
           const nextStreak =
-            remoteDate === yesterday
+            remoteDate === yesterday && remoteStreakCount > 0
               ? Math.max(localStreak.currentStreak, remoteStreakCount + 1)
-              : Math.max(localStreak.currentStreak, remoteStreakCount);
+              : Math.max(localStreak.currentStreak, 1);
           mergedStreak = {
             currentStreak: nextStreak,
             lastStudyDate: today,
             todayReviewedCount: localStreak.todayReviewedCount,
+            isStreakActiveToday: true,
+            streakStatus: "active_today",
           };
-        } else if (remoteDate === yesterday) {
+        } else if (remoteDate === yesterday || localStreak.lastStudyDate === yesterday) {
+          // Studied yesterday, but haven't studied today yet: streak is preserved for today!
+          const preserved = Math.max(
+            localStreak.lastStudyDate === yesterday ? localStreak.currentStreak : 0,
+            remoteDate === yesterday ? remoteStreakCount : 0
+          );
           mergedStreak = {
-            currentStreak: remoteStreakCount,
+            currentStreak: preserved,
             lastStudyDate: yesterday,
             todayReviewedCount: 0,
+            isStreakActiveToday: false,
+            streakStatus: preserved > 0 ? "at_risk" : "broken",
           };
         } else {
+          // Missed 1+ days: STREAK IS LOST -> 0
           mergedStreak = {
-            currentStreak: Math.max(
-              localStreak.currentStreak,
-              remoteStreakCount
-            ),
+            currentStreak: 0,
             lastStudyDate: remoteDate || localStreak.lastStudyDate,
             todayReviewedCount: 0,
+            isStreakActiveToday: false,
+            streakStatus: "broken",
           };
         }
       }
@@ -3758,49 +3775,98 @@ function getYesterdayDateString(): string {
 
 export function getStreakData(): StreakData {
   if (typeof window === "undefined") {
-    return { currentStreak: 1, lastStudyDate: null, todayReviewedCount: 0 };
+    return {
+      currentStreak: 0,
+      lastStudyDate: null,
+      todayReviewedCount: 0,
+      isStreakActiveToday: false,
+      streakStatus: "broken",
+    };
   }
 
   try {
     const raw = window.localStorage.getItem(STORAGE_KEYS.STREAK);
     if (!raw) {
-      return { currentStreak: 1, lastStudyDate: null, todayReviewedCount: 0 };
+      return {
+        currentStreak: 0,
+        lastStudyDate: null,
+        todayReviewedCount: 0,
+        isStreakActiveToday: false,
+        streakStatus: "broken",
+      };
     }
     const parsed = JSON.parse(raw) as Partial<StreakData> | null;
     if (!parsed || typeof parsed !== "object") {
-      return { currentStreak: 1, lastStudyDate: null, todayReviewedCount: 0 };
+      return {
+        currentStreak: 0,
+        lastStudyDate: null,
+        todayReviewedCount: 0,
+        isStreakActiveToday: false,
+        streakStatus: "broken",
+      };
     }
-    const currentStreak =
+
+    const storedStreak =
       typeof parsed.currentStreak === "number" && !isNaN(parsed.currentStreak)
-        ? Math.max(1, parsed.currentStreak)
-        : 1;
+        ? Math.max(0, parsed.currentStreak)
+        : 0;
+
     const today = getTodayDateString();
     const yesterday = getYesterdayDateString();
 
+    // 1. Studied today: streak is fully active and maintained
     if (parsed.lastStudyDate === today) {
       return {
-        currentStreak,
+        currentStreak: Math.max(1, storedStreak),
         lastStudyDate: today,
         todayReviewedCount:
           typeof parsed.todayReviewedCount === "number"
             ? parsed.todayReviewedCount
             : 0,
+        isStreakActiveToday: true,
+        streakStatus: "active_today",
       };
     }
-    if (parsed.lastStudyDate === yesterday) {
+
+    // 2. Studied yesterday, but not yet today: streak is preserved from yesterday,
+    // but at risk if not continued before midnight
+    if (parsed.lastStudyDate === yesterday && storedStreak > 0) {
       return {
-        currentStreak,
+        currentStreak: storedStreak,
         lastStudyDate: parsed.lastStudyDate,
         todayReviewedCount: 0,
+        isStreakActiveToday: false,
+        streakStatus: "at_risk",
       };
     }
-    return {
-      currentStreak: 1,
+
+    // 3. User missed 1 or more days (lastStudyDate < yesterday or null):
+    // STREAK IS LOST -> RESET TO 0!
+    const brokenStreakData: StreakData = {
+      currentStreak: 0,
       lastStudyDate: parsed.lastStudyDate || null,
       todayReviewedCount: 0,
+      isStreakActiveToday: false,
+      streakStatus: "broken",
     };
+
+    // If storage still holds a positive streak, persist the reset so cache doesn't lie
+    if (storedStreak > 0) {
+      window.localStorage.setItem(
+        STORAGE_KEYS.STREAK,
+        JSON.stringify(brokenStreakData)
+      );
+    }
+
+    return brokenStreakData;
   } catch {
-    return { currentStreak: 1, lastStudyDate: null, todayReviewedCount: 0 };
+    return {
+      currentStreak: 0,
+      lastStudyDate: null,
+      todayReviewedCount: 0,
+      isStreakActiveToday: false,
+      streakStatus: "broken",
+    };
   }
 }
 
@@ -3810,6 +3876,8 @@ export function recordStudyActivity(incrementCount = 1): StreakData {
       currentStreak: 1,
       lastStudyDate: null,
       todayReviewedCount: incrementCount,
+      isStreakActiveToday: true,
+      streakStatus: "active_today",
     };
   }
 
@@ -3817,15 +3885,19 @@ export function recordStudyActivity(incrementCount = 1): StreakData {
   const yesterday = getYesterdayDateString();
   const current = getStreakData();
 
-  let nextStreak = current.currentStreak || 1;
-  let todayCount = current.todayReviewedCount || 0;
+  let nextStreak = 1;
+  let todayCount = incrementCount;
 
   if (current.lastStudyDate === today) {
-    todayCount += incrementCount;
-  } else if (current.lastStudyDate === yesterday) {
-    nextStreak += 1;
+    // Already reviewed today: keep current streak and increment count
+    nextStreak = Math.max(1, current.currentStreak);
+    todayCount = (current.todayReviewedCount || 0) + incrementCount;
+  } else if (current.lastStudyDate === yesterday && current.currentStreak > 0) {
+    // Studied yesterday: consecutive day achieved! Increment streak
+    nextStreak = current.currentStreak + 1;
     todayCount = incrementCount;
   } else {
+    // Missed yesterday (lost streak) or first time ever: start fresh streak of 1 day
     nextStreak = 1;
     todayCount = incrementCount;
   }
@@ -3834,8 +3906,18 @@ export function recordStudyActivity(incrementCount = 1): StreakData {
     currentStreak: nextStreak,
     lastStudyDate: today,
     todayReviewedCount: todayCount,
+    isStreakActiveToday: true,
+    streakStatus: "active_today",
   };
 
   window.localStorage.setItem(STORAGE_KEYS.STREAK, JSON.stringify(updated));
+
+  // Notify all UI listeners (Header flame, Dashboard, Profile) of streak update
+  try {
+    window.dispatchEvent(new Event("speakflow-auth-changed"));
+  } catch {
+    // ignore
+  }
+
   return updated;
 }

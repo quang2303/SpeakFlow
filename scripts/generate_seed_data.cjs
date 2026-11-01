@@ -1915,7 +1915,7 @@ BEGIN
     email TEXT,
     full_name TEXT,
     avatar_url TEXT,
-    current_streak INT NOT NULL DEFAULT 1,
+    current_streak INT NOT NULL DEFAULT 0,
     last_study_date TEXT,
     today_reviewed_count INT NOT NULL DEFAULT 0,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()

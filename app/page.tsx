@@ -61,9 +61,11 @@ export default function HomePage() {
   const [decks, setDecks] = useState<Deck[]>([]);
   const [cards, setCards] = useState<Card[]>([]);
   const [streak, setStreak] = useState<StreakData>({
-    currentStreak: 1,
+    currentStreak: 0,
     lastStudyDate: null,
     todayReviewedCount: 0,
+    isStreakActiveToday: false,
+    streakStatus: "broken",
   });
   const [user, setUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -166,17 +168,94 @@ export default function HomePage() {
         </div>
       </div>
 
+      {/* Streak Alert: At Risk */}
+      {streak.streakStatus === "at_risk" && (
+        <div className="rounded-2xl bg-amber-50 border border-amber-200/90 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-amber-900 animate-in fade-in slide-in-from-top-1">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center shrink-0">
+              <Flame className="w-5 h-5 fill-amber-500 animate-bounce" />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-amber-900">
+                Chuỗi {streak.currentStreak} ngày của bạn sắp mất!
+              </p>
+              <p className="text-xs text-amber-700 mt-0.5">
+                Bạn chưa học hôm nay. Hoàn thành ít nhất 1 câu trước 24:00 để duy trì chuỗi học liên tiếp.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => openLevelModal(null, "study")}
+            className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-semibold text-xs transition-colors shrink-0 shadow-xs cursor-pointer"
+          >
+            Học ngay để giữ chuỗi
+          </button>
+        </div>
+      )}
+
+      {/* Streak Alert: Broken */}
+      {streak.streakStatus === "broken" && streak.lastStudyDate && (
+        <div className="rounded-2xl bg-rose-50 border border-rose-200/90 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-rose-900 animate-in fade-in slide-in-from-top-1">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0 text-base">
+              💔
+            </div>
+            <div>
+              <p className="text-sm font-bold text-rose-900">
+                Bạn đã bỏ lỡ 1 ngày và mất chuỗi học!
+              </p>
+              <p className="text-xs text-rose-700 mt-0.5">
+                Đừng nản lòng, hãy hoàn thành 1 câu ngay để thắp lại ngọn lửa chuỗi ngày mới.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => openLevelModal(null, "study")}
+            className="px-4 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-semibold text-xs transition-colors shrink-0 shadow-xs cursor-pointer"
+          >
+            Bắt đầu lại chuỗi mới
+          </button>
+        </div>
+      )}
+
       {/* ================= C. THỐNG KÊ HỌC TẬP ================= */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {/* Stat 1: Số ngày học liên tiếp */}
         <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-amber-50 text-amber-500 flex items-center justify-center shrink-0">
-            <Flame className="w-6 h-6 fill-amber-500" />
+          <div
+            className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${
+              streak.currentStreak > 0
+                ? "bg-amber-50 text-amber-500"
+                : "bg-slate-100 text-slate-400"
+            }`}
+          >
+            <Flame
+              className={`w-6 h-6 ${
+                streak.currentStreak > 0 ? "fill-amber-500" : ""
+              }`}
+            />
           </div>
-          <div>
-            <p className="text-2xl md:text-3xl font-extrabold text-slate-900 leading-tight">
-              {streak.currentStreak}
-            </p>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <p className="text-2xl md:text-3xl font-extrabold text-slate-900 leading-tight">
+                {streak.currentStreak}
+              </p>
+              {streak.streakStatus === "active_today" ? (
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  ✓ Đã giữ chuỗi
+                </span>
+              ) : streak.streakStatus === "at_risk" ? (
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200 animate-pulse">
+                  ⚠️ Cần học hôm nay
+                </span>
+              ) : (
+                <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">
+                  {streak.lastStudyDate ? "Đã mất chuỗi" : "Bắt đầu chuỗi"}
+                </span>
+              )}
+            </div>
             <p className="text-xs text-slate-500 font-medium mt-0.5">
               Số ngày học liên tiếp
             </p>

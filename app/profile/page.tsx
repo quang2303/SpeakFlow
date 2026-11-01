@@ -205,7 +205,8 @@ export default function ProfilePage() {
 
   const displayName = user?.full_name || (user?.email ? user.email.split("@")[0] : "Học viên (Chưa đăng nhập)");
   const email = user?.email || "Chưa liên kết tài khoản Google";
-  const streak = metrics?.streak ?? getStreakData().currentStreak;
+  const streakData = getStreakData();
+  const streak = metrics?.streak ?? streakData.currentStreak;
   const masteredCount = metrics?.masteredCount ?? 0;
   const totalCards = metrics?.totalCards ?? 100;
   const progressPercent = metrics?.progressPercent ?? Math.round((masteredCount / totalCards) * 100);
@@ -395,20 +396,39 @@ export default function ProfilePage() {
         <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs flex flex-col justify-between">
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-slate-500">Chuỗi học tập</span>
-            <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-500 flex items-center justify-center">
-              <Flame className="w-4 h-4 fill-amber-500" />
+            <div
+              className={`w-8 h-8 rounded-xl flex items-center justify-center ${
+                streak > 0 ? "bg-amber-50 text-amber-500" : "bg-slate-100 text-slate-400"
+              }`}
+            >
+              <Flame className={`w-4 h-4 ${streak > 0 ? "fill-amber-500" : ""}`} />
             </div>
           </div>
           <div className="mt-3">
-            <p className="text-2xl sm:text-3xl font-extrabold text-slate-900 leading-tight">
-              {streak} <span className="text-xs font-semibold text-slate-500">ngày</span>
-            </p>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <p className="text-2xl sm:text-3xl font-extrabold text-slate-900 leading-tight">
+                {streak} <span className="text-xs font-semibold text-slate-500">ngày</span>
+              </p>
+              {streakData.streakStatus === "active_today" ? (
+                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  Đã giữ
+                </span>
+              ) : streakData.streakStatus === "at_risk" ? (
+                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-200 animate-pulse">
+                  Chưa học
+                </span>
+              ) : (
+                <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-500">
+                  Mất chuỗi
+                </span>
+              )}
+            </div>
             <div className="flex items-center gap-1 mt-2.5" title="Điểm danh 7 ngày qua">
               {[...Array(7)].map((_, i) => (
                 <div
                   key={i}
                   className={`flex-1 h-1.5 rounded-full ${
-                    i >= 7 - streak ? "bg-amber-500" : "bg-slate-100"
+                    i >= 7 - streak && streak > 0 ? "bg-amber-500" : "bg-slate-100"
                   }`}
                 />
               ))}
