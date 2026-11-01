@@ -22,6 +22,7 @@ import {
   UserProfile,
 } from "@/lib/dataService";
 import { UserAvatar } from "./AuthModal";
+import { promptLoginToLearn } from "./RequireAuthModal";
 
 export const NAV_ITEMS = [
   {
@@ -98,6 +99,17 @@ export default function BottomNav() {
     await signOutUser();
     setUser(null);
     router.push("/login");
+  }
+
+  function handleNavClick(e: React.MouseEvent, item: { href: string; label: string }) {
+    if (!user && ["/learning-path", "/study", "/reflex", "/roleplay"].includes(item.href)) {
+      e.preventDefault();
+      promptLoginToLearn({
+        title: `Đăng nhập để vào mục ${item.label}`,
+        subtitle: "Vui lòng đăng nhập tài khoản để bắt đầu học và lưu lại kết quả.",
+        redirectUrl: item.href,
+      });
+    }
   }
 
   const displayName = user?.full_name || (user?.email ? user.email.split("@")[0] : "Học viên");
@@ -177,6 +189,7 @@ export default function BottomNav() {
                 <Link
                   key={item.href}
                   href={item.href}
+                  onClick={(e) => handleNavClick(e, item)}
                   title={collapsed ? item.label : undefined}
                   className={`flex items-center gap-3.5 px-3.5 py-3 rounded-xl transition-colors ${
                     collapsed ? "justify-center px-2" : ""
@@ -300,6 +313,7 @@ export default function BottomNav() {
               <Link
                 key={item.href}
                 href={item.href}
+                onClick={(e) => handleNavClick(e, item)}
                 className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-xl transition-colors ${
                   isActive
                     ? "text-brand-600 font-semibold bg-brand-50/80"

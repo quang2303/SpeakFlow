@@ -44,6 +44,7 @@ import {
   UserProfile,
 } from "@/lib/dataService";
 import AccountLockScreen from "@/components/AccountLockScreen";
+import RequireAuthBarrier from "@/components/RequireAuthBarrier";
 import {
   evaluatePronunciation,
   MicVisualState,
@@ -546,6 +547,16 @@ function RoleplayContent() {
 
   if (currentUser?.status === "locked") {
     return <AccountLockScreen user={currentUser} />;
+  }
+
+  if (!currentUser) {
+    return (
+      <RequireAuthBarrier
+        title="Đăng nhập để vào phòng Gia sư AI"
+        description="Đăng nhập tài khoản để luyện hội thoại nhập vai với AI Tutor, nhận chỉnh sửa ngữ pháp và lưu lại lịch sử."
+        redirectUrl="/roleplay"
+      />
+    );
   }
 
   return (

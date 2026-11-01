@@ -34,6 +34,7 @@ import {
   UserProfile,
 } from "@/lib/dataService";
 import AccountLockScreen from "@/components/AccountLockScreen";
+import RequireAuthBarrier from "@/components/RequireAuthBarrier";
 import {
   Card,
   CEFR_LEVEL_LIST,
@@ -573,6 +574,16 @@ function StudySessionContent() {
         <div className="h-10 w-64 bg-slate-200 rounded-xl animate-pulse" />
         <div className="h-96 w-full bg-white rounded-3xl border border-slate-200 animate-pulse" />
       </div>
+    );
+  }
+
+  if (!currentUser) {
+    return (
+      <RequireAuthBarrier
+        title="Đăng nhập để vào phòng Học & Nói"
+        description="Đăng nhập tài khoản để luyện phản xạ tiếng Anh, ghi nhớ theo chu trình SRS và lưu chuỗi học của bạn."
+        redirectUrl="/study"
+      />
     );
   }
 

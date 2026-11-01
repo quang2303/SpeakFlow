@@ -20,6 +20,8 @@ import {
   CEFR_LEVELS_META,
   CEFR_LEVEL_LIST,
 } from "@/lib/seedData";
+import { getStoredUserProfile } from "@/lib/dataService";
+import { promptLoginToLearn } from "./RequireAuthModal";
 
 interface LevelSelectorModalProps {
   isOpen: boolean;
@@ -89,6 +91,26 @@ export default function LevelSelectorModal({
   function handleStart(level: CEFRLevel | "all") {
     if (level !== "all" && countPerLevel[level] === 0) {
       setEmptyLevelAlert(level);
+      return;
+    }
+
+    const activeUser = getStoredUserProfile();
+    if (!activeUser) {
+      onClose();
+      promptLoginToLearn({
+        title: targetMode === "reflex" ? "Đăng nhập để luyện phản xạ" : "Đăng nhập để bắt đầu học",
+        subtitle: "Vui lòng đăng nhập tài khoản để lưu lại tiến trình học và chuỗi Streak của bạn.",
+        onAuthenticated: () => {
+          if (onSelectLevel) {
+            onSelectLevel(level);
+            return;
+          }
+          const deckParam = deck?.id ? encodeURIComponent(deck.id) : "all";
+          const levelParam = encodeURIComponent(level);
+          const basePath = targetMode === "reflex" ? "/reflex" : "/study";
+          router.push(`${basePath}?deck=${deckParam}&level=${levelParam}`);
+        },
+      });
       return;
     }
 

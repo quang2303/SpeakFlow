@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import BottomNav from "./BottomNav";
 import TopHeaderBar from "./TopHeaderBar";
 import BrowserSupportAlert from "./BrowserSupportAlert";
+import RequireAuthModal from "./RequireAuthModal";
 
 export default function AppLayoutShell({
   children,
@@ -38,6 +39,7 @@ export default function AppLayoutShell({
         <TopHeaderBar />
         <BrowserSupportAlert />
         <main className="flex-1 w-full">{children}</main>
+        <RequireAuthModal />
       </div>
     );
   }
@@ -54,6 +56,7 @@ export default function AppLayoutShell({
         <BrowserSupportAlert />
         <div className="max-w-5xl mx-auto w-full">{children}</div>
       </main>
+      <RequireAuthModal />
     </div>
   );
 }

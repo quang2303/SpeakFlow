@@ -38,6 +38,7 @@ import { isCardDue } from "@/lib/srs";
 import LevelSelectorModal from "@/components/LevelSelectorModal";
 import { getLatestAssessmentResult } from "@/lib/assessment/assessmentService";
 import type { AssessmentResult } from "@/lib/assessment/types";
+import { promptLoginToLearn } from "@/components/RequireAuthModal";
 
 function getDeckIcon(iconName: string) {
   switch (iconName) {
@@ -90,7 +91,17 @@ export default function HomePage() {
     setDecks(localData.decks);
     setCards(localData.cards);
     setUser(cachedUser);
-    setStreak(getStreakData());
+    setStreak(
+      cachedUser
+        ? getStreakData()
+        : {
+            currentStreak: 0,
+            lastStudyDate: null,
+            todayReviewedCount: 0,
+            isStreakActiveToday: false,
+            streakStatus: "broken",
+          }
+    );
     setLatestAssessment(getLatestAssessmentResult(cachedUser?.id));
     setLoading(false);
   }, []);
@@ -106,7 +117,17 @@ export default function HomePage() {
     setDecks(loadedDecks);
     setCards(loadedCards);
     setUser(currentUser);
-    setStreak(getStreakData());
+    setStreak(
+      currentUser
+        ? getStreakData()
+        : {
+            currentStreak: 0,
+            lastStudyDate: null,
+            todayReviewedCount: 0,
+            isStreakActiveToday: false,
+            streakStatus: "broken",
+          }
+    );
   }, [syncDashboardFromLocal]);
 
   useEffect(() => {
@@ -116,10 +137,11 @@ export default function HomePage() {
     return () => window.removeEventListener("speakflow-auth-changed", handler);
   }, [loadDashboard, syncDashboardFromLocal]);
 
-  const dueCards = cards.filter((c) => isCardDue(c));
-  const masteredCards = cards.filter(
-    (c) => c.box >= 3 || c.interval_days >= 3
-  );
+  // For unauthenticated guests, stats must be strictly 0
+  const dueCards = user ? cards.filter((c) => isCardDue(c)) : [];
+  const masteredCards = user
+    ? cards.filter((c) => c.box >= 3 || c.interval_days >= 3)
+    : [];
 
   const displayName = user?.full_name || (user?.email ? user.email.split("@")[0] : null);
 
@@ -131,7 +153,9 @@ export default function HomePage() {
           {displayName ? `Xin chào, ${displayName}!` : "Xin chào bạn!"}
         </h1>
         <p className="text-slate-500 text-sm md:text-base">
-          {dueCards.length > 0
+          {!user
+            ? "Đăng nhập để bắt đầu rèn luyện phản xạ và lưu chuỗi học tập mỗi ngày."
+            : dueCards.length > 0
             ? `Hôm nay bạn có ${dueCards.length} thẻ cần ôn tập để duy trì chuỗi phản xạ.`
             : "Bạn đã hoàn thành tất cả thẻ cần ôn hôm nay. Rất tuyệt vời!"}
         </p>
@@ -145,7 +169,7 @@ export default function HomePage() {
               Bài học hôm nay
             </h2>
             <span className="inline-flex items-center px-3 py-0.5 rounded-full text-xs font-semibold bg-brand-500 text-white shadow-xs">
-              {loading ? "..." : `${dueCards.length} thẻ cần ôn`}
+              {loading ? "..." : !user ? "0 thẻ cần ôn" : `${dueCards.length} thẻ cần ôn`}
             </span>
           </div>
           <p className="text-slate-600 text-sm leading-relaxed">
@@ -154,17 +178,38 @@ export default function HomePage() {
         </div>
 
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 shrink-0">
-          <Link
-            href="/learning-path"
+          <button
+            type="button"
+            onClick={() => {
+              if (!user) {
+                promptLoginToLearn({
+                  title: "Đăng nhập để vào Lộ trình cá nhân AI",
+                  subtitle: "AI sẽ phân tích trình độ và thiết lập kế hoạch học tập dành riêng cho bạn.",
+                  redirectUrl: "/learning-path",
+                });
+                return;
+              }
+              window.location.href = "/learning-path";
+            }}
             className="inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-2xl bg-gradient-to-r from-brand-600 to-emerald-600 hover:from-brand-700 hover:to-emerald-700 text-white font-semibold text-sm shadow-md shadow-brand-500/20 active:scale-[0.98] transition-all cursor-pointer"
           >
             <Compass className="w-4 h-4" />
             <span>Lộ trình cá nhân AI</span>
-          </Link>
+          </button>
 
           <button
             type="button"
-            onClick={() => openLevelModal(null, "study")}
+            onClick={() => {
+              if (!user) {
+                promptLoginToLearn({
+                  title: "Đăng nhập để bắt đầu học",
+                  subtitle: "Tiến trình ghi nhớ và chuỗi Streak sẽ được lưu trữ an toàn trong tài khoản của bạn.",
+                  onAuthenticated: () => openLevelModal(null, "study"),
+                });
+                return;
+              }
+              openLevelModal(null, "study");
+            }}
             className="inline-flex items-center justify-center gap-2 px-5 py-3.5 rounded-2xl bg-white hover:bg-slate-50 text-slate-700 font-semibold text-sm border border-slate-200/90 shadow-xs hover:border-slate-300 active:scale-[0.98] transition-all cursor-pointer"
           >
             <Play className="w-4 h-4 fill-slate-700" />
@@ -173,7 +218,17 @@ export default function HomePage() {
 
           <button
             type="button"
-            onClick={() => openLevelModal(null, "reflex")}
+            onClick={() => {
+              if (!user) {
+                promptLoginToLearn({
+                  title: "Đăng nhập để luyện phản xạ 60s",
+                  subtitle: "Luyện phản xạ tốc độ cao và ghi nhận kết quả vào thành tích của bạn.",
+                  onAuthenticated: () => openLevelModal(null, "reflex"),
+                });
+                return;
+              }
+              openLevelModal(null, "reflex");
+            }}
             className="inline-flex items-center justify-center gap-2 px-4 py-3.5 rounded-2xl bg-white hover:bg-slate-50 text-slate-700 font-medium text-sm border border-slate-200/90 shadow-xs hover:border-slate-300 active:scale-[0.98] transition-all cursor-pointer"
           >
             <Zap className="w-4 h-4 text-amber-500 fill-amber-500" />
@@ -233,17 +288,28 @@ export default function HomePage() {
               </p>
             </div>
           </div>
-          <Link
-            href="/placement-test"
-            className="px-5 py-2.5 rounded-xl bg-white hover:bg-slate-100 text-indigo-900 font-extrabold text-xs transition-colors shrink-0 shadow-xs text-center"
+          <button
+            type="button"
+            onClick={() => {
+              if (!user) {
+                promptLoginToLearn({
+                  title: "Đăng nhập để làm bài kiểm tra xếp lớp",
+                  subtitle: "Kết quả đánh giá CEFR và lộ trình thích ứng sẽ được lưu vào tài khoản của bạn.",
+                  redirectUrl: "/placement-test",
+                });
+                return;
+              }
+              window.location.href = "/placement-test";
+            }}
+            className="px-5 py-2.5 rounded-xl bg-white hover:bg-slate-100 text-indigo-900 font-extrabold text-xs transition-colors shrink-0 shadow-xs text-center cursor-pointer"
           >
             Làm bài kiểm tra ngay &rarr;
-          </Link>
+          </button>
         </div>
       )}
 
-      {/* Streak Alert: At Risk */}
-      {streak.streakStatus === "at_risk" && (
+      {/* Streak Alert: At Risk (Only for authenticated users) */}
+      {user && streak.streakStatus === "at_risk" && (
         <div className="rounded-2xl bg-amber-50 border border-amber-200/90 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-amber-900 animate-in fade-in slide-in-from-top-1">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center shrink-0">
@@ -268,8 +334,8 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* Streak Alert: Broken */}
-      {streak.streakStatus === "broken" && streak.lastStudyDate && (
+      {/* Streak Alert: Broken (Only for authenticated users) */}
+      {user && streak.streakStatus === "broken" && streak.lastStudyDate && (
         <div className="rounded-2xl bg-rose-50 border border-rose-200/90 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-rose-900 animate-in fade-in slide-in-from-top-1">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0 text-base">
@@ -398,17 +464,29 @@ export default function HomePage() {
               .map((deck) => {
               const Icon = getDeckIcon(deck.icon);
               const deckCards = cards.filter((c) => c.deck_id === deck.id);
-              const deckLearned = deckCards.filter(
-                (c) => c.last_practiced_at !== null || c.box > 1
-              ).length;
+              const deckLearned = user
+                ? deckCards.filter(
+                    (c) => c.last_practiced_at !== null || c.box > 1
+                  ).length
+                : 0;
               const total = deckCards.length;
               const progressPct =
-                total > 0 ? Math.round((deckLearned / total) * 100) : 0;
+                user && total > 0 ? Math.round((deckLearned / total) * 100) : 0;
 
               return (
                 <div
                   key={deck.id}
-                  onClick={() => openLevelModal(deck, "study")}
+                  onClick={() => {
+                    if (!user) {
+                      promptLoginToLearn({
+                        title: `Đăng nhập để học "${deck.title}"`,
+                        subtitle: "Đăng nhập để lưu tiến trình học chủ đề này và phát triển chuỗi Streak.",
+                        onAuthenticated: () => openLevelModal(deck, "study"),
+                      });
+                      return;
+                    }
+                    openLevelModal(deck, "study");
+                  }}
                   className="bg-white border border-slate-200/80 hover:border-brand-200 hover:shadow-sm rounded-2xl p-5 transition-all flex flex-col justify-between gap-4 cursor-pointer group"
                 >
                   <div className="flex items-start gap-3.5">
@@ -465,7 +543,18 @@ export default function HomePage() {
 
                     <button
                       type="button"
-                      onClick={() => openLevelModal(deck, "study")}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (!user) {
+                          promptLoginToLearn({
+                            title: `Đăng nhập để học "${deck.title}"`,
+                            subtitle: "Đăng nhập để lưu tiến trình học chủ đề này và phát triển chuỗi Streak.",
+                            onAuthenticated: () => openLevelModal(deck, "study"),
+                          });
+                          return;
+                        }
+                        openLevelModal(deck, "study");
+                      }}
                       className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-brand-50 hover:bg-brand-500 text-brand-600 hover:text-white font-semibold text-xs transition-colors shadow-2xs cursor-pointer shrink-0"
                     >
                       <span>Học ngay</span>

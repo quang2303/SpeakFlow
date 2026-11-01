@@ -33,6 +33,7 @@ import {
 } from "lucide-react";
 import { getStoredUserProfile, UserProfile } from "@/lib/dataService";
 import AccountLockScreen from "@/components/AccountLockScreen";
+import RequireAuthBarrier from "@/components/RequireAuthBarrier";
 import { getLatestAssessmentResult } from "@/lib/assessment/assessmentService";
 import type { AssessmentResult } from "@/lib/assessment/types";
 import {
@@ -377,6 +378,16 @@ export default function LearningPathPage() {
 
   if (currentUser?.status === "locked") {
     return <AccountLockScreen user={currentUser} />;
+  }
+
+  if (!currentUser) {
+    return (
+      <RequireAuthBarrier
+        title="Đăng nhập để vào Lộ trình cá nhân AI"
+        description="Đăng nhập tài khoản để AI xây dựng và theo dõi lộ trình học tập thích ứng cá nhân hóa cho bạn."
+        redirectUrl="/learning-path"
+      />
+    );
   }
 
   // Current Day info

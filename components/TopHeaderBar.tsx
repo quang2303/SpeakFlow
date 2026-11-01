@@ -40,13 +40,37 @@ export default function TopHeaderBar() {
   });
 
   const syncState = useCallback(() => {
-    setUser(getStoredUserProfile());
-    setStreak(getStreakData());
+    const cachedUser = getStoredUserProfile();
+    setUser(cachedUser);
+    setStreak(
+      cachedUser
+        ? getStreakData()
+        : {
+            currentStreak: 0,
+            lastStudyDate: null,
+            todayReviewedCount: 0,
+            isStreakActiveToday: false,
+            streakStatus: "broken",
+          }
+    );
   }, []);
 
   useEffect(() => {
     syncState();
-    void getCurrentUser().then((u) => setUser(u));
+    void getCurrentUser().then((u) => {
+      setUser(u);
+      setStreak(
+        u
+          ? getStreakData()
+          : {
+              currentStreak: 0,
+              lastStudyDate: null,
+              todayReviewedCount: 0,
+              isStreakActiveToday: false,
+              streakStatus: "broken",
+            }
+      );
+    });
 
     // Load saved theme
     try {

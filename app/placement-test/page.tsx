@@ -59,6 +59,7 @@ import {
   getStoredUserProfile,
   UserProfile,
 } from "@/lib/dataService";
+import { promptLoginToLearn } from "@/components/RequireAuthModal";
 import {
   evaluatePronunciation,
   speakEnglish,
@@ -203,6 +204,19 @@ function PlacementTestContent() {
 
   // Initialize test with selected mode
   const handleStartTest = (mode: TestMode) => {
+    if (!currentUser) {
+      promptLoginToLearn({
+        title: "Đăng nhập để làm bài kiểm tra xếp lớp",
+        subtitle: "Đăng nhập để lưu trữ kết quả đánh giá CEFR và lộ trình học cá nhân hóa của bạn.",
+        onAuthenticated: () => {
+          const freshUser = getStoredUserProfile();
+          setCurrentUser(freshUser);
+          handleStartTest(mode);
+        },
+      });
+      return;
+    }
+
     setSelectedMode(mode);
     const rawQuestions = getQuestionsForTestMode(mode);
     const sanitized = rawQuestions.map(sanitizeQuestionForClient);

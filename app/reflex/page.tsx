@@ -28,6 +28,7 @@ import {
   UserProfile,
 } from "@/lib/dataService";
 import AccountLockScreen from "@/components/AccountLockScreen";
+import RequireAuthBarrier from "@/components/RequireAuthBarrier";
 import { Card, CEFR_LEVELS_META, getLevelBadgeColor } from "@/lib/seedData";
 import {
   evaluatePronunciation,
@@ -375,6 +376,16 @@ function ReflexDrillContent() {
 
   if (currentUser?.status === "locked") {
     return <AccountLockScreen user={currentUser} />;
+  }
+
+  if (!currentUser) {
+    return (
+      <RequireAuthBarrier
+        title="Đăng nhập để luyện phản xạ 60s"
+        description="Đăng nhập tài khoản để bắt đầu phòng luyện phản xạ siêu tốc và ghi nhận điểm số vào thành tích cá nhân."
+        redirectUrl="/reflex"
+      />
+    );
   }
 
   return (

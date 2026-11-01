@@ -2563,12 +2563,40 @@ export async function syncUserProgressWithCloud(
 }
 
 export function getInitialLocalData(): { decks: Deck[]; cards: Card[] } {
-  return ensureLocalSeed();
+  const local = ensureLocalSeed();
+  const cachedUser = getStoredUserProfile();
+  if (!cachedUser) {
+    // Unauthenticated guest: return fresh clean seed state with no practiced/mastered progress
+    return {
+      decks: local.decks,
+      cards: local.cards.map((c) => ({
+        ...c,
+        box: 1,
+        interval_days: 0,
+        ease_factor: 2.5,
+        last_practiced_at: null,
+        next_review_at: c.next_review_at || new Date().toISOString(),
+      })),
+    };
+  }
+  return local;
 }
 
 export function getInitialAccountProgressSummary(): AccountProgressSummary {
   const { cards } = ensureLocalSeed();
   const user = getStoredUserProfile();
+  if (!user) {
+    return {
+      totalCards: cards.length,
+      practicedCards: 0,
+      masteredCards: 0,
+      dueCards: 0,
+      currentStreak: 0,
+      todayReviewedCount: 0,
+      lastStudyDate: null,
+      lastSyncedAt: null,
+    };
+  }
   const streak = getStreakData();
 
   const practicedCards = cards.filter(
@@ -2596,6 +2624,18 @@ export function getInitialAccountProgressSummary(): AccountProgressSummary {
  */
 export async function getAccountProgressSummary(): Promise<AccountProgressSummary> {
   const [cards, user] = await Promise.all([getCards(), getCurrentUser()]);
+  if (!user) {
+    return {
+      totalCards: cards.length,
+      practicedCards: 0,
+      masteredCards: 0,
+      dueCards: 0,
+      currentStreak: 0,
+      todayReviewedCount: 0,
+      lastStudyDate: null,
+      lastSyncedAt: null,
+    };
+  }
   const streak = getStreakData();
 
   const practicedCards = cards.filter(
@@ -3115,11 +3155,22 @@ export async function getCards(deckId?: string, level?: string): Promise<Card[]>
               interval_days: 0,
               ease_factor: 2.5,
               last_practiced_at: null,
+              next_review_at: card.next_review_at || new Date().toISOString(),
             }));
           }
+        } else {
+          // Unauthenticated guest: clean all cards to default initial SRS state so guest never sees dirty progress
+          baseCards = baseCards.map((card) => ({
+            ...card,
+            box: 1,
+            interval_days: 0,
+            ease_factor: 2.5,
+            last_practiced_at: null,
+            next_review_at: card.next_review_at || new Date().toISOString(),
+          }));
         }
 
-        if (!deckId && (!level || level === "all") && typeof window !== "undefined" && baseCards.length > 0) {
+        if (activeUser && !deckId && (!level || level === "all") && typeof window !== "undefined" && baseCards.length > 0) {
           window.localStorage.setItem(
             STORAGE_KEYS.CARDS,
             JSON.stringify(baseCards)
@@ -3954,6 +4005,18 @@ function getYesterdayDateString(): string {
 
 export function getStreakData(): StreakData {
   if (typeof window === "undefined") {
+    return {
+      currentStreak: 0,
+      lastStudyDate: null,
+      todayReviewedCount: 0,
+      isStreakActiveToday: false,
+      streakStatus: "broken",
+    };
+  }
+
+  // Unauthenticated guests have strictly 0 streak
+  const activeUser = getStoredUserProfile();
+  if (!activeUser) {
     return {
       currentStreak: 0,
       lastStudyDate: null,
