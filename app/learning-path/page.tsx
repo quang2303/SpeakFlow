@@ -33,6 +33,8 @@ import {
 } from "lucide-react";
 import { getStoredUserProfile, UserProfile } from "@/lib/dataService";
 import AccountLockScreen from "@/components/AccountLockScreen";
+import { getLatestAssessmentResult } from "@/lib/assessment/assessmentService";
+import type { AssessmentResult } from "@/lib/assessment/types";
 import {
   AdaptiveAdjustment,
   CEFRLevel,
@@ -164,11 +166,13 @@ export default function LearningPathPage() {
 
   // Selected Day in Roadmap View
   const [selectedRoadmapDayNum, setSelectedRoadmapDayNum] = useState<number>(1);
+  const [latestAssessment, setLatestAssessment] = useState<AssessmentResult | null>(null);
 
   // Load state on mount
   useEffect(() => {
     const user = getStoredUserProfile();
     setCurrentUser(user);
+    setLatestAssessment(getLatestAssessmentResult(user?.id));
 
     const goal = getActiveGoal();
     const plan = getActivePlan();
@@ -189,6 +193,7 @@ export default function LearningPathPage() {
       const u = getStoredUserProfile();
       setCurrentUser(u);
       setActiveGoal(getActiveGoal());
+      setLatestAssessment(getLatestAssessmentResult(u?.id));
       const p = getActivePlan();
       setActivePlan(p);
       if (p) {
@@ -969,6 +974,33 @@ export default function LearningPathPage() {
           {/* STEP 1: CEFR Level */}
           {wizardStep === 1 && (
             <div className="space-y-5">
+              {latestAssessment && (
+                <div className="p-3.5 rounded-2xl bg-indigo-50 border border-indigo-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white font-extrabold flex items-center justify-center shrink-0">
+                      {latestAssessment.estimatedCefrLevel}
+                    </div>
+                    <div>
+                      <p className="font-bold text-slate-900">
+                        Đề xuất từ bài kiểm tra xếp lớp ({latestAssessment.overallScore}/100 điểm)
+                      </p>
+                      <p className="text-[11px] text-slate-600">
+                        Khuyên học cấp độ {latestAssessment.recommendedLearningLevel} • Khoảng: {latestAssessment.possibleLevelRange}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setWizCurrentLevel(latestAssessment.recommendedLearningLevel);
+                    }}
+                    className="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shrink-0 transition-colors shadow-2xs"
+                  >
+                    Áp dụng trình độ này
+                  </button>
+                </div>
+              )}
+
               <div className="space-y-2">
                 <label className="text-xs font-bold uppercase tracking-wider text-slate-600">
                   Trình độ hiện tại của bạn:

@@ -43,6 +43,8 @@ import {
 import { UserAvatar } from "@/components/AuthModal";
 import StudentDetailModal from "@/components/admin/StudentDetailModal";
 import AccountLockScreen from "@/components/AccountLockScreen";
+import { getAssessmentStats } from "@/lib/assessment/assessmentService";
+import type { AssessmentStats } from "@/lib/assessment/types";
 
 type FilterOption =
   | "all"
@@ -102,6 +104,7 @@ export default function AdminDashboardPage() {
 
   // Toast feedback banner
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [assessmentStats, setAssessmentStats] = useState<AssessmentStats | null>(null);
 
   function showToast(msg: string) {
     setToastMessage(msg);
@@ -117,6 +120,7 @@ export default function AdminDashboardPage() {
     }
     const user = getStoredUserProfile();
     setCurrentUser(user);
+    setAssessmentStats(getAssessmentStats(user?.id));
     if (user?.role === "admin") {
       const data = getAllUsersForAdmin();
       setStudents(data);
@@ -590,6 +594,82 @@ export default function AdminDashboardPage() {
           <p className="text-[11px] text-slate-400">
             Học viên nghỉ quá 3 ngày hoặc điểm phát âm dưới 65%
           </p>
+        </div>
+      </div>
+
+      {/* ==================================================================== */}
+      {/* 1C. PLACEMENT TEST DIAGNOSTICS & CEFR DISTRIBUTION                   */}
+      {/* ==================================================================== */}
+      <div className="rounded-3xl bg-slate-900/90 border border-slate-800 p-5 space-y-4 shadow-lg">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="space-y-0.5">
+            <span className="text-[11px] font-extrabold uppercase tracking-wider text-sky-400">
+              Chẩn đoán xếp lớp đầu vào (Placement Test Analytics)
+            </span>
+            <p className="text-xs text-slate-400">
+              Thống kê phân bổ cấp độ CEFR và điểm số năng lực 5 kỹ năng của người học
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold text-slate-300">
+              Tổng lượt test: {assessmentStats?.totalAttempts || 0}
+            </span>
+          </div>
+        </div>
+
+        {/* CEFR Level distribution */}
+        <div className="grid grid-cols-2 sm:grid-cols-6 gap-2.5 pt-1">
+          {(["A1", "A2", "B1", "B2", "C1", "C2"] as const).map((lvl) => {
+            const count = assessmentStats?.levelDistribution[lvl] || 0;
+            return (
+              <div
+                key={lvl}
+                className="p-3 rounded-2xl bg-slate-950/70 border border-slate-800 text-center space-y-1"
+              >
+                <span className="text-xs font-extrabold text-sky-400">{lvl}</span>
+                <p className="text-xl font-extrabold text-white">{count}</p>
+                <p className="text-[10px] text-slate-500 font-semibold">
+                  {assessmentStats?.totalAttempts
+                    ? Math.round((count / assessmentStats.totalAttempts) * 100)
+                    : 0}%
+                </p>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Skill Average Scores */}
+        <div className="pt-2 border-t border-slate-800/80 grid grid-cols-2 sm:grid-cols-5 gap-3 text-xs">
+          <div>
+            <span className="text-slate-500 font-semibold">Ngữ pháp TB:</span>
+            <p className="font-extrabold text-slate-200 mt-0.5">
+              {assessmentStats?.averageScoresBySkill.grammar || 0}/100
+            </p>
+          </div>
+          <div>
+            <span className="text-slate-500 font-semibold">Từ vựng TB:</span>
+            <p className="font-extrabold text-slate-200 mt-0.5">
+              {assessmentStats?.averageScoresBySkill.vocabulary || 0}/100
+            </p>
+          </div>
+          <div>
+            <span className="text-slate-500 font-semibold">Đọc hiểu TB:</span>
+            <p className="font-extrabold text-slate-200 mt-0.5">
+              {assessmentStats?.averageScoresBySkill.reading || 0}/100
+            </p>
+          </div>
+          <div>
+            <span className="text-slate-500 font-semibold">Nghe hiểu TB:</span>
+            <p className="font-extrabold text-slate-200 mt-0.5">
+              {assessmentStats?.averageScoresBySkill.listening || 0}/100
+            </p>
+          </div>
+          <div>
+            <span className="text-slate-500 font-semibold">Nói &amp; Diễn đạt TB:</span>
+            <p className="font-extrabold text-slate-200 mt-0.5">
+              {assessmentStats?.averageScoresBySkill.speaking || 0}/100
+            </p>
+          </div>
         </div>
       </div>
 

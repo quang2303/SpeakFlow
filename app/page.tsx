@@ -36,6 +36,8 @@ import {
 } from "@/lib/seedData";
 import { isCardDue } from "@/lib/srs";
 import LevelSelectorModal from "@/components/LevelSelectorModal";
+import { getLatestAssessmentResult } from "@/lib/assessment/assessmentService";
+import type { AssessmentResult } from "@/lib/assessment/types";
 
 function getDeckIcon(iconName: string) {
   switch (iconName) {
@@ -74,6 +76,8 @@ export default function HomePage() {
   const [isLevelModalOpen, setIsLevelModalOpen] = useState(false);
   const [levelModalMode, setLevelModalMode] = useState<"study" | "reflex">("study");
 
+  const [latestAssessment, setLatestAssessment] = useState<AssessmentResult | null>(null);
+
   function openLevelModal(deck: Deck | null, mode: "study" | "reflex" = "study") {
     setSelectedDeckForLevel(deck);
     setLevelModalMode(mode);
@@ -87,6 +91,7 @@ export default function HomePage() {
     setCards(localData.cards);
     setUser(cachedUser);
     setStreak(getStreakData());
+    setLatestAssessment(getLatestAssessmentResult(cachedUser?.id));
     setLoading(false);
   }, []);
 
@@ -176,6 +181,66 @@ export default function HomePage() {
           </button>
         </div>
       </div>
+
+      {/* ================= B. PLACEMENT TEST DIAGNOSTIC BANNER ================= */}
+      {latestAssessment ? (
+        <div className="rounded-2xl bg-gradient-to-r from-indigo-50 to-blue-50 border border-indigo-200/90 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-indigo-950">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 font-extrabold text-sm shadow-xs">
+              {latestAssessment.estimatedCefrLevel}
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-bold text-slate-900">
+                  Trình độ CEFR: Cấp độ {latestAssessment.estimatedCefrLevel} (Điểm: {latestAssessment.overallScore}/100)
+                </p>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700">
+                  Đã đánh giá
+                </span>
+              </div>
+              <p className="text-xs text-slate-600 mt-0.5">
+                Khoảng trình độ: {latestAssessment.possibleLevelRange} • Khuyên học: Cấp độ {latestAssessment.recommendedLearningLevel}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/placement-test"
+              className="px-4 py-2 rounded-xl bg-white hover:bg-slate-50 text-indigo-700 font-bold text-xs border border-indigo-200 transition-colors shrink-0 shadow-2xs"
+            >
+              Kiểm tra lại
+            </Link>
+            <Link
+              href="/learning-path"
+              className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition-colors shrink-0 shadow-xs"
+            >
+              Vào Lộ trình &rarr;
+            </Link>
+          </div>
+        </div>
+      ) : (
+        <div className="rounded-2xl bg-gradient-to-r from-indigo-900 to-slate-900 text-white p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm">
+          <div className="flex items-start sm:items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-white/10 backdrop-blur-md text-amber-300 flex items-center justify-center shrink-0 text-lg">
+              🎯
+            </div>
+            <div>
+              <p className="text-sm font-bold text-white">
+                Chưa biết trình độ tiếng Anh của mình?
+              </p>
+              <p className="text-xs text-indigo-200 mt-0.5">
+                Làm bài kiểm tra xếp lớp 10 phút để xác định CEFR và nhận lộ trình học được may đo riêng cho bạn.
+              </p>
+            </div>
+          </div>
+          <Link
+            href="/placement-test"
+            className="px-5 py-2.5 rounded-xl bg-white hover:bg-slate-100 text-indigo-900 font-extrabold text-xs transition-colors shrink-0 shadow-xs text-center"
+          >
+            Làm bài kiểm tra ngay &rarr;
+          </Link>
+        </div>
+      )}
 
       {/* Streak Alert: At Risk */}
       {streak.streakStatus === "at_risk" && (

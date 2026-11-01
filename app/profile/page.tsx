@@ -44,6 +44,11 @@ import {
 } from "@/lib/dataService";
 import { UserAvatar } from "@/components/AuthModal";
 import { speakEnglish } from "@/lib/speech";
+import {
+  getLatestAssessmentResult,
+  getAssessmentHistory,
+} from "@/lib/assessment/assessmentService";
+import type { AssessmentResult } from "@/lib/assessment/types";
 
 const THEME_OPTIONS = [
   { id: "emerald", label: "Xanh Mint", dotColor: "bg-emerald-500", ringColor: "ring-emerald-400" },
@@ -69,6 +74,8 @@ export default function ProfilePage() {
   const [syncingCloud, setSyncingCloud] = useState(false);
   const [currentTheme, setCurrentTheme] = useState<string>("emerald");
   const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [latestAssessment, setLatestAssessment] = useState<AssessmentResult | null>(null);
+  const [assessmentHistory, setAssessmentHistory] = useState<AssessmentResult[]>([]);
 
   const loadData = useCallback(async () => {
     const cachedUser = getStoredUserProfile();
@@ -77,6 +84,8 @@ export default function ProfilePage() {
 
     const m = getStudentProfileMetrics(cachedUser?.id);
     setMetrics(m);
+    setLatestAssessment(getLatestAssessmentResult(cachedUser?.id));
+    setAssessmentHistory(getAssessmentHistory(cachedUser?.id));
 
     // Fetch fresh user
     const freshUser = await getCurrentUser();
@@ -85,6 +94,8 @@ export default function ProfilePage() {
       setNameInput(freshUser.full_name || (freshUser.email ? freshUser.email.split("@")[0] : "Học viên"));
       const freshMetrics = getStudentProfileMetrics(freshUser.id);
       setMetrics(freshMetrics);
+      setLatestAssessment(getLatestAssessmentResult(freshUser.id));
+      setAssessmentHistory(getAssessmentHistory(freshUser.id));
     }
     setLoading(false);
   }, []);
@@ -657,6 +668,85 @@ export default function ProfilePage() {
             </p>
             <p className="text-xs text-slate-500 max-w-sm mx-auto">
               Hãy tiếp tục luyện tập Shadowing và Phản xạ 60s để duy trì phong độ giao tiếp nhé!
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* ================= D2. LỊCH SỬ KIỂM TRA TRÌNH ĐỘ (PLACEMENT TEST) ================= */}
+      <div className="bg-white border border-slate-200/80 rounded-3xl p-6 sm:p-7 shadow-xs space-y-4">
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <h2 className="text-lg font-bold text-slate-900">
+                Đánh giá trình độ tiếng Anh (CEFR Placement)
+              </h2>
+              {latestAssessment && (
+                <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
+                  Cấp độ {latestAssessment.estimatedCefrLevel}
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-slate-500">
+              Kết quả kiểm tra chẩn đoán và theo dõi sự tiến bộ qua các lần đánh giá
+            </p>
+          </div>
+
+          <Link
+            href="/placement-test"
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition-colors shadow-xs"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            <span>{latestAssessment ? "Kiểm tra lại" : "Làm bài kiểm tra ngay"}</span>
+          </Link>
+        </div>
+
+        {latestAssessment ? (
+          <div className="space-y-4 pt-1">
+            <div className="p-4 rounded-2xl bg-indigo-50/70 border border-indigo-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-extrabold text-slate-900">
+                  Trình độ ước lượng: Cấp độ {latestAssessment.estimatedCefrLevel} (Điểm: {latestAssessment.overallScore}/100)
+                </p>
+                <p className="text-xs text-slate-600 mt-0.5">
+                  Khoảng trình độ: {latestAssessment.possibleLevelRange} • Kiểm tra ngày: {new Date(latestAssessment.completedAt).toLocaleDateString("vi-VN")}
+                </p>
+              </div>
+              <Link
+                href="/placement-test"
+                className="text-xs font-bold text-indigo-700 hover:text-indigo-900 underline"
+              >
+                Xem chi tiết phân tích &rarr;
+              </Link>
+            </div>
+
+            {/* 5-Skill breakdown */}
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+              {Object.entries(latestAssessment.skillScores).map(([skill, s]) => (
+                <div
+                  key={skill}
+                  className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-center space-y-1"
+                >
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                    {skill}
+                  </span>
+                  <p className="text-base font-extrabold text-slate-900">
+                    {s.isAssessed ? `${s.score}` : "—"}
+                  </p>
+                  <p className="text-[10px] font-semibold text-indigo-600">
+                    {s.isAssessed ? s.levelEstimate : "Chưa test"}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="py-6 text-center space-y-2 rounded-2xl bg-slate-50/60 border border-slate-100">
+            <p className="text-xs font-semibold text-slate-700">
+              Bạn chưa thực hiện bài kiểm tra xếp lớp nào
+            </p>
+            <p className="text-[11px] text-slate-500 max-w-sm mx-auto">
+              Hãy làm bài kiểm tra nhanh 10 phút để SpeakFlow phân tích điểm mạnh, điểm yếu và gợi ý lộ trình phù hợp nhất cho bạn.
             </p>
           </div>
         )}

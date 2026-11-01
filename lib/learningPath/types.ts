@@ -48,6 +48,7 @@ export interface LearningGoal {
     level: CEFRLevel;
     test_date: string;
     scores?: Record<string, number>;
+    weaknesses?: string[];
   };
   created_at: string;
   updated_at: string;
