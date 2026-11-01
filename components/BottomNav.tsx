@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Home,
+  Compass,
   BookOpen,
   Zap,
   MessageSquare,
@@ -29,13 +30,18 @@ export const NAV_ITEMS = [
     icon: Home,
   },
   {
+    href: "/learning-path",
+    label: "Lộ trình",
+    icon: Compass,
+  },
+  {
     href: "/study",
     label: "Học & Nói",
     icon: BookOpen,
   },
   {
     href: "/reflex",
-    label: "Phản xạ 60s",
+    label: "Phản xạ",
     icon: Zap,
   },
   {
@@ -282,7 +288,7 @@ export default function BottomNav() {
         className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-md border-t border-slate-200/90 px-2 py-1.5 shadow-sm"
         style={{ paddingBottom: "max(0.375rem, env(safe-area-inset-bottom))" }}
       >
-        <div className="max-w-md mx-auto grid grid-cols-5 gap-1">
+        <div className="max-w-md mx-auto grid grid-cols-6 gap-0.5">
           {NAV_ITEMS.map((item) => {
             const Icon = item.icon;
             const isActive =

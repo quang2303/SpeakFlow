@@ -16,6 +16,7 @@ import {
   Terminal,
   FileText,
   Award,
+  Compass,
 } from "lucide-react";
 import {
   getCards,
@@ -148,22 +149,30 @@ export default function HomePage() {
         </div>
 
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 shrink-0">
+          <Link
+            href="/learning-path"
+            className="inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-2xl bg-gradient-to-r from-brand-600 to-emerald-600 hover:from-brand-700 hover:to-emerald-700 text-white font-semibold text-sm shadow-md shadow-brand-500/20 active:scale-[0.98] transition-all cursor-pointer"
+          >
+            <Compass className="w-4 h-4" />
+            <span>Lộ trình cá nhân AI</span>
+          </Link>
+
           <button
             type="button"
             onClick={() => openLevelModal(null, "study")}
-            className="inline-flex items-center justify-center gap-2 px-7 py-3.5 rounded-2xl bg-brand-500 hover:bg-brand-600 text-white font-semibold text-base shadow-md shadow-brand-500/25 hover:shadow-lg hover:shadow-brand-500/30 active:scale-[0.98] transition-all cursor-pointer"
+            className="inline-flex items-center justify-center gap-2 px-5 py-3.5 rounded-2xl bg-white hover:bg-slate-50 text-slate-700 font-semibold text-sm border border-slate-200/90 shadow-xs hover:border-slate-300 active:scale-[0.98] transition-all cursor-pointer"
           >
-            <Play className="w-5 h-5 fill-white" />
-            <span>Bắt đầu học</span>
+            <Play className="w-4 h-4 fill-slate-700" />
+            <span>Ôn thẻ tự do</span>
           </button>
 
           <button
             type="button"
             onClick={() => openLevelModal(null, "reflex")}
-            className="inline-flex items-center justify-center gap-2 px-5 py-3.5 rounded-2xl bg-white hover:bg-slate-50 text-slate-700 font-medium text-sm border border-slate-200/90 shadow-xs hover:border-slate-300 active:scale-[0.98] transition-all cursor-pointer"
+            className="inline-flex items-center justify-center gap-2 px-4 py-3.5 rounded-2xl bg-white hover:bg-slate-50 text-slate-700 font-medium text-sm border border-slate-200/90 shadow-xs hover:border-slate-300 active:scale-[0.98] transition-all cursor-pointer"
           >
             <Zap className="w-4 h-4 text-amber-500 fill-amber-500" />
-            <span>Luyện phản xạ 60s</span>
+            <span>60s</span>
           </button>
         </div>
       </div>
