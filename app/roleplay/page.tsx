@@ -11,6 +11,8 @@ import {
   Check,
   Sparkles,
   RotateCcw,
+  Bot,
+  Lightbulb,
 } from "lucide-react";
 import {
   getStoredUserProfile,
@@ -37,6 +39,17 @@ interface RoleplayScenario {
   targetReplyEn: string;
   targetReplyVi: string;
   phraseEn: string;
+}
+
+interface AIReplyData {
+  replyEn: string;
+  replyVi: string;
+  feedbackVi: string;
+  suggestedReplies: Array<{
+    en: string;
+    vi: string;
+  }>;
+  source?: "gemini" | "builtin";
 }
 
 const ROLEPLAY_SCENARIOS: RoleplayScenario[] = [
@@ -84,6 +97,8 @@ export default function RoleplayPage() {
     useState<PronunciationEvaluationResult | null>(null);
   const [micState, setMicState] = useState<MicVisualState>("idle");
   const [micError, setMicError] = useState<string | null>(null);
+  const [aiReply, setAiReply] = useState<AIReplyData | null>(null);
+  const [isLoadingAi, setIsLoadingAi] = useState(false);
   const recognizerRef = useRef<SpeechRecognizerController | null>(null);
 
   useEffect(() => {
@@ -114,6 +129,8 @@ export default function RoleplayPage() {
     setEvalResult(null);
     setMicState("idle");
     setMicError(null);
+    setAiReply(null);
+    setIsLoadingAi(false);
   }
 
   function handleToggleMic() {
@@ -125,6 +142,8 @@ export default function RoleplayPage() {
     setMicError(null);
     setSpokenText("");
     setEvalResult(null);
+    setAiReply(null);
+    setIsLoadingAi(false);
     setMicState("listening");
 
     const controller = startSpeechRecognition({
@@ -153,6 +172,29 @@ export default function RoleplayPage() {
           score: result.score,
           mispronounced_words: redWords,
         });
+
+        // Trigger AI conversational response & smart feedback
+        setIsLoadingAi(true);
+        fetch("/api/ai/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            userMessage: finalTranscript,
+            scenarioTitle: scenario.title,
+            scenarioContext: scenario.contextVi,
+            level: "B1",
+          }),
+        })
+          .then((res) => res.json())
+          .then((data: AIReplyData) => {
+            if (data && data.replyEn) {
+              setAiReply(data);
+            }
+          })
+          .catch(() => {})
+          .finally(() => {
+            setIsLoadingAi(false);
+          });
       },
       onError: (err) => {
         setMicError(err);
@@ -338,6 +380,74 @@ export default function RoleplayPage() {
                   );
                 })}
               </div>
+            </div>
+          )}
+
+          {/* AI Partner Response & Feedback Card */}
+          {isLoadingAi && (
+            <div className="w-full bg-indigo-50/70 border border-indigo-200/80 rounded-2xl p-4 flex items-center justify-center gap-2 text-indigo-700 text-xs font-semibold animate-pulse">
+              <Bot className="w-4 h-4 text-indigo-600 animate-spin" />
+              <span>AI Tutor đang lắng nghe và soạn câu đối đáp...</span>
+            </div>
+          )}
+
+          {aiReply && !isLoadingAi && (
+            <div className="w-full bg-gradient-to-br from-indigo-50/80 via-white to-emerald-50/50 border border-indigo-200/90 rounded-2xl p-5 space-y-4 shadow-sm text-left">
+              <div className="flex items-center justify-between border-b border-indigo-100/80 pb-2.5">
+                <span className="text-xs font-bold text-indigo-700 flex items-center gap-1.5 uppercase tracking-wide">
+                  <Bot className="w-4 h-4 text-indigo-600" />
+                  AI Partner phản hồi ({aiReply.source === "gemini" ? "Gemini 1.5" : "Smart Tutor"}):
+                </span>
+                <button
+                  type="button"
+                  onClick={() => speakEnglish(aiReply.replyEn, 1.0)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white hover:bg-indigo-50 text-indigo-800 border border-indigo-200 text-xs font-semibold transition-colors shadow-xs"
+                >
+                  <Volume2 className="w-3.5 h-3.5 text-indigo-600" />
+                  Nghe AI nói
+                </button>
+              </div>
+
+              <div>
+                <p className="text-base font-bold text-slate-900 leading-snug">
+                  &ldquo;{aiReply.replyEn}&rdquo;
+                </p>
+                <p className="text-xs text-slate-600 mt-1">{aiReply.replyVi}</p>
+              </div>
+
+              {aiReply.feedbackVi && (
+                <div className="bg-white/90 border border-indigo-100 rounded-xl p-3 flex items-start gap-2.5 text-xs text-slate-700">
+                  <Lightbulb className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                  <p className="leading-relaxed">
+                    <strong className="text-indigo-950 font-semibold">Góp ý từ AI:</strong>{" "}
+                    {aiReply.feedbackVi}
+                  </p>
+                </div>
+              )}
+
+              {aiReply.suggestedReplies && aiReply.suggestedReplies.length > 0 && (
+                <div className="space-y-2 pt-1">
+                  <span className="text-xs font-semibold text-slate-500">
+                    💡 Bạn có thể tiếp tục nói:
+                  </span>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {aiReply.suggestedReplies.map((sug, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => speakEnglish(sug.en, 1.0)}
+                        className="text-left p-2.5 rounded-xl bg-white hover:bg-emerald-50/60 border border-slate-200 hover:border-emerald-300 text-xs transition-colors group shadow-xs"
+                      >
+                        <p className="font-semibold text-slate-800 group-hover:text-emerald-800 flex items-center justify-between">
+                          <span>&ldquo;{sug.en}&rdquo;</span>
+                          <Volume2 className="w-3.5 h-3.5 text-slate-400 group-hover:text-emerald-600 shrink-0 ml-1" />
+                        </p>
+                        <p className="text-[11px] text-slate-500 mt-0.5">{sug.vi}</p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>

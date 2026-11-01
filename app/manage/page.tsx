@@ -92,28 +92,69 @@ count me in,/kaʊnt mi ɪn/,cho tôi tham gia với,Are you guys going for karao
 on my way,/ɑːn maɪ weɪ/,đang trên đường tới rồi,Hang on five minutes, I'm on my way!,Đợi 5 phút nhé, tôi đang trên đường tới rồi!,Câu trả lời cực nhanh khi bạn bè hỏi bạn đang ở đâu.,A1`;
 
 function parseCsvBatch(csvText: string) {
-  const lines = csvText
-    .split(/\r?\n/)
-    .map((l) => l.trim())
-    .filter(Boolean);
-  if (lines.length === 0) return [];
+  if (!csvText || !csvText.trim()) return [];
 
-  const startIndex = lines[0].toLowerCase().includes("phrase_en") ? 1 : 0;
+  const rows: string[][] = [];
+  let currentRow: string[] = [];
+  let currentField = "";
+  let inQuotes = false;
+
+  for (let i = 0; i < csvText.length; i++) {
+    const char = csvText[i];
+    const nextChar = csvText[i + 1];
+
+    if (char === '"') {
+      if (inQuotes && nextChar === '"') {
+        currentField += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (char === "," && !inQuotes) {
+      currentRow.push(currentField.trim());
+      currentField = "";
+    } else if ((char === "\r" || char === "\n") && !inQuotes) {
+      if (char === "\r" && nextChar === "\n") {
+        i++;
+      }
+      currentRow.push(currentField.trim());
+      currentField = "";
+      if (currentRow.some((f) => f.length > 0)) {
+        rows.push(currentRow);
+      }
+      currentRow = [];
+    } else {
+      currentField += char;
+    }
+  }
+
+  if (currentField.length > 0 || currentRow.length > 0) {
+    currentRow.push(currentField.trim());
+    if (currentRow.some((f) => f.length > 0)) {
+      rows.push(currentRow);
+    }
+  }
+
+  if (rows.length === 0) return [];
+
+  const startIndex = rows[0][0]?.toLowerCase().includes("phrase_en") ? 1 : 0;
   const results = [];
 
-  for (let i = startIndex; i < lines.length; i++) {
-    const parts = lines[i].split(",").map((p) => p.trim());
+  for (let i = startIndex; i < rows.length; i++) {
+    const parts = rows[i];
     if (parts.length >= 5) {
       const candidateLevel = parts[6]?.trim().toUpperCase();
-      const validLevel: CEFRLevel = ["A1", "A2", "B1", "B2", "C1", "C2"].includes(candidateLevel)
+      const validLevel: CEFRLevel = ["A1", "A2", "B1", "B2", "C1", "C2"].includes(
+        candidateLevel
+      )
         ? (candidateLevel as CEFRLevel)
         : "B1";
       results.push({
-        phrase_en: parts[0],
+        phrase_en: parts[0] || "",
         ipa: parts[1] || "/.../",
-        meaning_vi: parts[2],
-        sentence_en: parts[3],
-        sentence_vi: parts[4],
+        meaning_vi: parts[2] || "",
+        sentence_en: parts[3] || "",
+        sentence_vi: parts[4] || "",
         context_note: parts[5] || "Mẫu câu phản xạ tự thêm.",
         level: validLevel,
       });

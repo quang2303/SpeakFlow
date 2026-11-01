@@ -1933,29 +1933,96 @@ BEGIN
   ALTER TABLE public.user_card_progress ENABLE ROW LEVEL SECURITY;
   ALTER TABLE public.user_stats ENABLE ROW LEVEL SECURITY;
 
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_policies WHERE tablename = 'decks' AND policyname = 'Allow public access to decks'
-  ) THEN
-    CREATE POLICY "Allow public access to decks" ON public.decks FOR ALL USING (true) WITH CHECK (true);
-  END IF;
+  -- 1. DECKS RLS: Anyone can view system or public decks; owners have full control
+  DROP POLICY IF EXISTS "Allow public access to decks" ON public.decks;
+  DROP POLICY IF EXISTS "Decks read policy" ON public.decks;
+  DROP POLICY IF EXISTS "Decks insert policy" ON public.decks;
+  DROP POLICY IF EXISTS "Decks update policy" ON public.decks;
+  DROP POLICY IF EXISTS "Decks delete policy" ON public.decks;
 
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_policies WHERE tablename = 'cards' AND policyname = 'Allow public access to cards'
-  ) THEN
-    CREATE POLICY "Allow public access to cards" ON public.cards FOR ALL USING (true) WITH CHECK (true);
-  END IF;
+  CREATE POLICY "Decks read policy" ON public.decks
+    FOR SELECT USING (is_system = true OR is_public = true OR auth.uid() = user_id);
 
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_policies WHERE tablename = 'user_card_progress' AND policyname = 'Allow public access to user_card_progress'
-  ) THEN
-    CREATE POLICY "Allow public access to user_card_progress" ON public.user_card_progress FOR ALL USING (true) WITH CHECK (true);
-  END IF;
+  CREATE POLICY "Decks insert policy" ON public.decks
+    FOR INSERT WITH CHECK (auth.uid() = user_id);
 
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_policies WHERE tablename = 'user_stats' AND policyname = 'Allow public access to user_stats'
-  ) THEN
-    CREATE POLICY "Allow public access to user_stats" ON public.user_stats FOR ALL USING (true) WITH CHECK (true);
-  END IF;
+  CREATE POLICY "Decks update policy" ON public.decks
+    FOR UPDATE USING (auth.uid() = user_id AND is_system = false)
+    WITH CHECK (auth.uid() = user_id AND is_system = false);
+
+  CREATE POLICY "Decks delete policy" ON public.decks
+    FOR DELETE USING (auth.uid() = user_id AND is_system = false);
+
+  -- 2. CARDS RLS: Viewable if belonging to system/public decks or owned; owners can manage
+  DROP POLICY IF EXISTS "Allow public access to cards" ON public.cards;
+  DROP POLICY IF EXISTS "Cards read policy" ON public.cards;
+  DROP POLICY IF EXISTS "Cards insert policy" ON public.cards;
+  DROP POLICY IF EXISTS "Cards update policy" ON public.cards;
+  DROP POLICY IF EXISTS "Cards delete policy" ON public.cards;
+
+  CREATE POLICY "Cards read policy" ON public.cards
+    FOR SELECT USING (
+      deck_id IN (SELECT id FROM public.decks WHERE is_system = true OR is_public = true)
+      OR auth.uid() = user_id
+      OR deck_id IN (SELECT id FROM public.decks WHERE user_id = auth.uid())
+    );
+
+  CREATE POLICY "Cards insert policy" ON public.cards
+    FOR INSERT WITH CHECK (
+      auth.uid() = user_id
+      OR deck_id IN (SELECT id FROM public.decks WHERE user_id = auth.uid())
+    );
+
+  CREATE POLICY "Cards update policy" ON public.cards
+    FOR UPDATE USING (
+      auth.uid() = user_id
+      OR deck_id IN (SELECT id FROM public.decks WHERE user_id = auth.uid())
+    );
+
+  CREATE POLICY "Cards delete policy" ON public.cards
+    FOR DELETE USING (
+      auth.uid() = user_id
+      OR deck_id IN (SELECT id FROM public.decks WHERE user_id = auth.uid())
+    );
+
+  -- 3. USER CARD PROGRESS RLS: Strictly private to each user
+  DROP POLICY IF EXISTS "Allow public access to user_card_progress" ON public.user_card_progress;
+  DROP POLICY IF EXISTS "User progress isolation policy" ON public.user_card_progress;
+
+  CREATE POLICY "User progress isolation policy" ON public.user_card_progress
+    FOR ALL USING (auth.uid() = user_id)
+    WITH CHECK (auth.uid() = user_id);
+
+  -- 4. USER STATS RLS: Strictly private to each user
+  DROP POLICY IF EXISTS "Allow public access to user_stats" ON public.user_stats;
+  DROP POLICY IF EXISTS "User stats isolation policy" ON public.user_stats;
+
+  CREATE POLICY "User stats isolation policy" ON public.user_stats
+    FOR ALL USING (auth.uid() = user_id)
+    WITH CHECK (auth.uid() = user_id);
+
+  -- 5. STUDY LOGS TABLE & RLS
+  CREATE TABLE IF NOT EXISTS public.study_logs (
+    id TEXT PRIMARY KEY,
+    user_id UUID NOT NULL,
+    mode TEXT NOT NULL,
+    card_id TEXT,
+    phrase_en TEXT NOT NULL,
+    sentence_en TEXT NOT NULL,
+    spoken_text TEXT,
+    score INT NOT NULL DEFAULT 100,
+    rating TEXT,
+    mispronounced_words JSONB DEFAULT '[]'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  );
+
+  ALTER TABLE public.study_logs ENABLE ROW LEVEL SECURITY;
+  CREATE INDEX IF NOT EXISTS idx_study_logs_user_id ON public.study_logs(user_id);
+
+  DROP POLICY IF EXISTS "Study logs isolation policy" ON public.study_logs;
+  CREATE POLICY "Study logs isolation policy" ON public.study_logs
+    FOR ALL USING (auth.uid() = user_id)
+    WITH CHECK (auth.uid() = user_id);
 
   -- 5. SEED DATA: 6 CONVERSATIONAL DECKS + 108 HIGH-UTILITY REFLEX CARDS (18 PER DECK)
   INSERT INTO public.decks (id, title, description, icon, is_system, is_public, created_at) VALUES

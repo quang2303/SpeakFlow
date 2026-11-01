@@ -10,6 +10,33 @@ import {
   isSystemCard,
 } from "./seedData";
 import { calculateNextSRS, isCardDue, SRSRating } from "./srs";
+import {
+  PendingCardAction,
+  PendingDeckAction,
+} from "./services/types";
+import {
+  enqueuePendingCard,
+  enqueuePendingDeck,
+  flushPendingOutboxSync,
+  getPendingCardActions,
+  getPendingDeckActions,
+  initOnlineSyncListener,
+  OUTBOX_STORAGE_KEYS,
+} from "./services/syncService";
+
+export type {
+  PendingCardAction,
+  PendingDeckAction,
+} from "./services/types";
+export {
+  enqueuePendingCard,
+  enqueuePendingDeck,
+  flushPendingOutboxSync,
+  getPendingCardActions,
+  getPendingDeckActions,
+  initOnlineSyncListener,
+  OUTBOX_STORAGE_KEYS,
+};
 
 const STORAGE_KEYS = {
   DECKS: "speakflow_decks_v1",
@@ -23,10 +50,6 @@ const STORAGE_KEYS = {
   ADMIN_OVERRIDES: "speakflow_admin_overrides_v1",
   ADMIN_DELETED_IDS: "speakflow_admin_deleted_ids_v1",
 };
-
-const DEFAULT_SUPABASE_URL = "https://ncfudvrowukvppppexcf.supabase.co";
-const DEFAULT_SUPABASE_KEY =
-  "sb_publishable_R4qlwEYBtVqTCeNHKH6HdQ_29XF8ceW";
 
 export interface StreakData {
   currentStreak: number;
@@ -236,19 +259,20 @@ function decodeJwtPayload(token: string): Record<string, unknown> | null {
 }
 
 export function getSupabaseProjectUrl(): string {
-  return resolveSupabaseCredentials()?.url || DEFAULT_SUPABASE_URL;
+  return resolveSupabaseCredentials()?.url || "";
 }
 
 export function getSupabaseCallbackUrl(): string {
-  return `${getSupabaseProjectUrl()}/auth/v1/callback`;
+  const projectUrl = getSupabaseProjectUrl();
+  return projectUrl ? `${projectUrl}/auth/v1/callback` : "";
 }
 
 function resolveSupabaseCredentials(): { url: string; key: string } | null {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || DEFAULT_SUPABASE_URL;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
   const key =
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-    DEFAULT_SUPABASE_KEY;
+    "";
 
   if (!url || !key) return null;
   if (
@@ -485,6 +509,14 @@ export function getSupabaseClient(): SupabaseClient | null {
   }
 
   initSupabaseAuthListener(supabaseInstance);
+  if (typeof window !== "undefined") {
+    initOnlineSyncListener(async () => {
+      const u = getStoredUserProfile();
+      if (u) {
+        await syncUserProgressWithCloud(u);
+      }
+    });
+  }
   return supabaseInstance;
 }
 
@@ -2175,6 +2207,13 @@ export async function syncUserProgressWithCloud(
     if (!supabase) return;
 
     try {
+      // 0. Drain pending offline outbox queue first
+      try {
+        await flushPendingOutboxSync(supabase, user);
+      } catch {
+        // Continue with progress sync even if outbox flush encountered non-fatal error
+      }
+
       const today = getTodayDateString();
       const yesterday = getYesterdayDateString();
       const localStreak = getStreakData();
@@ -2796,11 +2835,21 @@ export async function syncDeckToSupabase(deck: Deck): Promise<void> {
       icon: deck.icon,
       created_at: deck.created_at,
     };
-    await supabase
+    const { error: safeError } = await supabase
       .from("decks")
       .upsert([safePayload], { onConflict: "id" });
+    if (!safeError) return;
   } catch {
     // Fallback ignored
+  }
+
+  // If cloud upsert failed (offline or network dropped), enqueue to pending deck outbox
+  if (deck.user_id && deck.user_id !== "local_guest") {
+    enqueuePendingDeck({
+      action: "update",
+      deck,
+      userId: deck.user_id,
+    });
   }
 }
 
@@ -3268,6 +3317,7 @@ export async function addCard(
   }
 
   const supabase = getSupabaseClient();
+  let cloudInserted = false;
   if (supabase) {
     try {
       const payload = activeUser
@@ -3279,11 +3329,21 @@ export async function addCard(
         .select()
         .single();
       if (!error && data) {
+        cloudInserted = true;
         return data as Card;
       }
     } catch {
       // Fallback already persisted in localStorage
     }
+  }
+
+  // If cloud insert was not successful (offline / network error), enqueue into pending outbox
+  if (!cloudInserted && activeUser) {
+    enqueuePendingCard({
+      action: "create",
+      card: newCard,
+      userId: activeUser.id,
+    });
   }
 
   return newCard;
@@ -3342,14 +3402,29 @@ export async function importCardsBatch(
 
   const supabase = getSupabaseClient();
   const activeUser = getStoredUserProfile();
+  let cloudBatchSuccess = false;
   if (supabase) {
     try {
       const payload = activeUser
         ? createdCards.map((c) => sanitizeCardForSupabase({ ...c, user_id: activeUser.id }))
         : createdCards.map(sanitizeCardForSupabase);
-      await supabase.from("cards").insert(payload);
+      const { error } = await supabase.from("cards").insert(payload);
+      if (!error) {
+        cloudBatchSuccess = true;
+      }
     } catch {
       // Fallback already saved locally
+    }
+  }
+
+  // If offline, enqueue all imported cards into pending outbox
+  if (!cloudBatchSuccess && activeUser) {
+    for (const card of createdCards) {
+      enqueuePendingCard({
+        action: "create",
+        card,
+        userId: activeUser.id,
+      });
     }
   }
 
@@ -3382,6 +3457,7 @@ export async function deleteCard(cardId: string): Promise<{ success: boolean; me
   }
 
   const supabase = getSupabaseClient();
+  let cloudDeleted = false;
   if (supabase) {
     try {
       let query = supabase.from("cards").delete().eq("id", cardId);
@@ -3392,10 +3468,22 @@ export async function deleteCard(cardId: string): Promise<{ success: boolean; me
           query = query.not("user_id", "is", null);
         }
       }
-      await query;
+      const { error } = await query;
+      if (!error) {
+        cloudDeleted = true;
+      }
     } catch {
       // ignore
     }
+  }
+
+  // If offline or network drop, enqueue deletion to outbox
+  if (!cloudDeleted && activeUser) {
+    enqueuePendingCard({
+      action: "delete",
+      cardId,
+      userId: activeUser.id,
+    });
   }
 
   return { success: true };
@@ -3487,13 +3575,26 @@ export async function deleteCustomDeck(
   }
 
   const supabase = getSupabaseClient();
+  let cloudDeckDeleted = false;
   if (supabase) {
     try {
       await supabase.from("cards").delete().eq("deck_id", deckId);
-      await supabase.from("decks").delete().eq("id", deckId);
+      const { error } = await supabase.from("decks").delete().eq("id", deckId);
+      if (!error) {
+        cloudDeckDeleted = true;
+      }
     } catch {
       // ignore
     }
+  }
+
+  // If offline or network drop, enqueue deck deletion to outbox
+  if (!cloudDeckDeleted && activeUser && activeUser.id !== "local_guest") {
+    enqueuePendingDeck({
+      action: "delete",
+      deckId,
+      userId: activeUser.id,
+    });
   }
 
   return { success: true };

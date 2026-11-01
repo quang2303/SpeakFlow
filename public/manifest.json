@@ -1,18 +1,37 @@
 {
-  "name": "SpeakFlow - Phản xạ Giao tiếp Tiếng Anh",
+  "name": "SpeakFlow - Phản Xạ Giao Tiếp Tiếng Anh",
   "short_name": "SpeakFlow",
-  "description": "Ứng dụng luyện phản xạ giao tiếp tiếng Anh bằng phương pháp Chunking, Active Recall, Spaced Repetition (SM-2) & Shadowing.",
+  "description": "Ứng dụng luyện phản xạ giao tiếp tiếng Anh bằng phương pháp Chunking, Active Recall, Spaced Repetition (SRS) & Shadowing.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#020617",
-  "theme_color": "#020617",
-  "orientation": "portrait",
+  "background_color": "#ffffff",
+  "theme_color": "#10b981",
+  "orientation": "portrait-primary",
+  "lang": "vi",
+  "categories": ["education", "productivity"],
   "icons": [
     {
       "src": "/icon.svg",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Luyện Flashcard (SRS)",
+      "url": "/study",
+      "description": "Ôn tập thẻ ghi nhớ với thuật toán lặp lại ngắt quãng"
+    },
+    {
+      "name": "Phản xạ 60 giây",
+      "url": "/reflex",
+      "description": "Thử thách phản xạ nói tiếng Anh trong 60 giây"
+    },
+    {
+      "name": "Nhập vai Đối thoại",
+      "url": "/roleplay",
+      "description": "Thực hành đối thoại giao tiếp tự nhiên"
     }
   ]
 }

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import BottomNav from "./BottomNav";
 import TopHeaderBar from "./TopHeaderBar";
+import BrowserSupportAlert from "./BrowserSupportAlert";
 
 export default function AppLayoutShell({
   children,
@@ -35,6 +36,7 @@ export default function AppLayoutShell({
     return (
       <div className="min-h-screen bg-white text-slate-800 flex flex-col">
         <TopHeaderBar />
+        <BrowserSupportAlert />
         <main className="flex-1 w-full">{children}</main>
       </div>
     );
@@ -49,6 +51,7 @@ export default function AppLayoutShell({
         } pb-24 md:pb-10 min-w-0 bg-[#FAFCFB]/60 transition-all duration-200`}
       >
         <TopHeaderBar />
+        <BrowserSupportAlert />
         <div className="max-w-5xl mx-auto w-full">{children}</div>
       </main>
     </div>

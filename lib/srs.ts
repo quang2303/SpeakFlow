@@ -19,13 +19,21 @@ export interface SRSUpdateResult {
  * - "easy"  -> Phản xạ ngay (7 ngày): Base 7 days or interval * ease_factor * 1.3, box + 1
  */
 export function calculateNextSRS(
-  card: Pick<Card, "box" | "interval_days" | "ease_factor">,
+  card: Pick<Card, "box" | "interval_days" | "ease_factor"> & {
+    last_practiced_at?: string | null;
+  },
   rating: SRSRating
 ): SRSUpdateResult {
   const now = new Date();
   let box = card.box || 1;
   let interval = card.interval_days || 0;
   let ease = card.ease_factor || 2.5;
+
+  // Prevent exponential interval inflation if user reviews the same card repeatedly in the same day
+  const isReviewedToday = Boolean(
+    card.last_practiced_at &&
+      new Date(card.last_practiced_at).toDateString() === now.toDateString()
+  );
 
   let nextReviewDate = new Date(now);
 
@@ -34,36 +42,42 @@ export function calculateNextSRS(
       box = 1;
       interval = 0;
       ease = Math.max(1.3, Number((ease - 0.2).toFixed(2)));
-      // Review again in 1 minute
-      nextReviewDate = new Date(now.getTime() + 60 * 1000);
+      // Review again in 10 minutes
+      nextReviewDate = new Date(now.getTime() + 10 * 60 * 1000);
       break;
 
     case "hard":
       box = Math.max(1, box);
-      interval = interval === 0 ? 1 : Math.max(1, Math.round(interval * 1.2));
-      ease = Math.max(1.3, Number((ease - 0.15).toFixed(2)));
-      nextReviewDate.setDate(now.getDate() + interval);
+      if (!isReviewedToday) {
+        interval = interval === 0 ? 1 : Math.max(1, Math.round(interval * 1.2));
+        ease = Math.max(1.3, Number((ease - 0.15).toFixed(2)));
+      }
+      nextReviewDate.setDate(now.getDate() + Math.max(1, interval));
       break;
 
     case "good":
-      box = Math.min(5, box + 1);
-      if (interval === 0) {
-        interval = 3;
-      } else {
-        interval = Math.max(3, Math.round(interval * ease));
+      if (!isReviewedToday) {
+        box = Math.min(5, box + 1);
+        if (interval === 0) {
+          interval = 3;
+        } else {
+          interval = Math.max(3, Math.round(interval * ease));
+        }
       }
-      nextReviewDate.setDate(now.getDate() + interval);
+      nextReviewDate.setDate(now.getDate() + Math.max(1, interval));
       break;
 
     case "easy":
-      box = Math.min(5, box + 1);
-      if (interval === 0) {
-        interval = 7;
-      } else {
-        interval = Math.max(7, Math.round(interval * ease * 1.3));
+      if (!isReviewedToday) {
+        box = Math.min(5, box + 1);
+        if (interval === 0) {
+          interval = 7;
+        } else {
+          interval = Math.max(7, Math.round(interval * ease * 1.3));
+        }
+        ease = Math.min(3.0, Number((ease + 0.15).toFixed(2)));
       }
-      ease = Math.min(3.0, Number((ease + 0.15).toFixed(2)));
-      nextReviewDate.setDate(now.getDate() + interval);
+      nextReviewDate.setDate(now.getDate() + Math.max(1, interval));
       break;
   }
 
@@ -80,10 +94,12 @@ export function calculateNextSRS(
  * Preview label for each rating button on the Study Screen
  */
 export function getRatingPreviewLabel(
-  card: Pick<Card, "box" | "interval_days" | "ease_factor">,
+  card: Pick<Card, "box" | "interval_days" | "ease_factor"> & {
+    last_practiced_at?: string | null;
+  },
   rating: SRSRating
 ): string {
-  if (rating === "again") return "1p";
+  if (rating === "again") return "10p";
   const result = calculateNextSRS(card, rating);
   return `${result.interval_days} ngày`;
 }
