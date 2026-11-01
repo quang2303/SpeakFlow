@@ -13,28 +13,44 @@ import { calculateNextSRS, isCardDue, SRSRating } from "./srs";
 import {
   PendingCardAction,
   PendingDeckAction,
+  PendingProgressAction,
+  PendingStudyLogAction,
+  ProgressSnapshot,
 } from "./services/types";
 import {
   enqueuePendingCard,
   enqueuePendingDeck,
+  enqueuePendingProgress,
+  enqueuePendingStudyLog,
   flushPendingOutboxSync,
   getPendingCardActions,
   getPendingDeckActions,
+  getPendingProgressActions,
+  getPendingStudyLogActions,
   initOnlineSyncListener,
+  resolveCardProgressConflict,
   OUTBOX_STORAGE_KEYS,
 } from "./services/syncService";
 
 export type {
   PendingCardAction,
   PendingDeckAction,
+  PendingProgressAction,
+  PendingStudyLogAction,
+  ProgressSnapshot,
 } from "./services/types";
 export {
   enqueuePendingCard,
   enqueuePendingDeck,
+  enqueuePendingProgress,
+  enqueuePendingStudyLog,
   flushPendingOutboxSync,
   getPendingCardActions,
   getPendingDeckActions,
+  getPendingProgressActions,
+  getPendingStudyLogActions,
   initOnlineSyncListener,
+  resolveCardProgressConflict,
   OUTBOX_STORAGE_KEYS,
 };
 
@@ -710,12 +726,24 @@ export function getStoredUserProfile(): UserProfile | null {
   return null;
 }
 
+let currentSessionUserId: string | null = null;
+
 function saveStoredUserProfile(
   profile: UserProfile | null,
   notify = true
 ): void {
   if (typeof window === "undefined") return;
   invalidateMemorySeedCache();
+
+  const newUserId = profile ? profile.id : null;
+  const isSwitchingUser = currentSessionUserId !== null && currentSessionUserId !== newUserId;
+  currentSessionUserId = newUserId;
+
+  if (isSwitchingUser) {
+    // Prevent old user's local streak or in-memory progress from bleeding into new user
+    window.localStorage.removeItem(STORAGE_KEYS.STREAK);
+  }
+
   if (!profile) {
     window.localStorage.removeItem(STORAGE_KEYS.USER_PROFILE);
     if (notify) {
@@ -1410,6 +1438,41 @@ export async function logStudyActivity(input: {
       STORAGE_KEYS.ACTIVITY_LOGS,
       JSON.stringify(updated)
     );
+  }
+
+  // Push to Supabase study_logs table or queue in offline outbox
+  const supabase = getSupabaseClient();
+  let cloudLogged = false;
+  if (supabase && activeUser?.id) {
+    try {
+      const { error } = await supabase.from("study_logs").insert([
+        {
+          id: entry.id,
+          user_id: activeUser.id,
+          user_name: entry.user_name,
+          user_email: entry.user_email,
+          mode: entry.mode,
+          card_id: entry.card_id || null,
+          phrase_en: entry.phrase_en,
+          sentence_en: entry.sentence_en,
+          spoken_text: entry.spoken_text || null,
+          score: entry.score,
+          rating: entry.rating || null,
+          mispronounced_words: entry.mispronounced_words,
+          created_at: entry.created_at,
+        },
+      ]);
+      if (!error) cloudLogged = true;
+    } catch {
+      // ignore
+    }
+  }
+
+  if (!cloudLogged && activeUser?.id) {
+    enqueuePendingStudyLog({
+      userId: activeUser.id,
+      log: entry,
+    });
   }
 
   return entry;
@@ -2385,33 +2448,43 @@ export async function syncUserProgressWithCloud(
           card.last_practiced_at !== null || card.box > 1;
 
         if (remoteProg && localPracticed) {
-          const remoteTime = new Date(
-            remoteProg.last_practiced_at || 0
-          ).getTime();
-          const localTime = new Date(card.last_practiced_at || 0).getTime();
-
-          if (localTime > remoteTime) {
-            rowsToUpsert.push({
-              user_id: user.id,
-              card_id: card.id,
+          const conflict = resolveCardProgressConflict(
+            {
               box: card.box,
               interval_days: card.interval_days,
               ease_factor: card.ease_factor,
               next_review_at: card.next_review_at,
-              last_practiced_at:
-                card.last_practiced_at || new Date().toISOString(),
-            });
-            return card;
-          } else {
-            return {
-              ...card,
+              last_practiced_at: card.last_practiced_at || new Date().toISOString(),
+            },
+            {
               box: remoteProg.box,
               interval_days: remoteProg.interval_days,
               ease_factor: remoteProg.ease_factor,
               next_review_at: remoteProg.next_review_at,
               last_practiced_at: remoteProg.last_practiced_at,
-            };
+            }
+          );
+
+          if (conflict.winner === "local") {
+            rowsToUpsert.push({
+              user_id: user.id,
+              card_id: card.id,
+              box: conflict.merged.box,
+              interval_days: conflict.merged.interval_days,
+              ease_factor: conflict.merged.ease_factor,
+              next_review_at: conflict.merged.next_review_at,
+              last_practiced_at: conflict.merged.last_practiced_at,
+            });
           }
+
+          return {
+            ...card,
+            box: conflict.merged.box,
+            interval_days: conflict.merged.interval_days,
+            ease_factor: conflict.merged.ease_factor,
+            next_review_at: conflict.merged.next_review_at,
+            last_practiced_at: conflict.merged.last_practiced_at,
+          };
         } else if (remoteProg) {
           return {
             ...card,
@@ -3123,63 +3196,68 @@ export async function submitCardReview(
 
   const supabase = getSupabaseClient();
   const activeUser = (await getCurrentUser()) || getStoredUserProfile();
+  let cloudProgressSaved = false;
 
-  if (supabase) {
+  if (supabase && activeUser) {
     try {
-      if (activeUser) {
-        // Save to per-user progress table
-        await supabase.from("user_card_progress").upsert(
+      // Save to per-user progress table
+      const { error: progError } = await supabase.from("user_card_progress").upsert(
+        {
+          user_id: activeUser.id,
+          card_id: card.id,
+          box: srsUpdate.box,
+          interval_days: srsUpdate.interval_days,
+          ease_factor: srsUpdate.ease_factor,
+          next_review_at: srsUpdate.next_review_at,
+          last_practiced_at: srsUpdate.last_practiced_at,
+        },
+        { onConflict: "user_id,card_id" }
+      );
+
+      if (latestStreak) {
+        await supabase.from("user_stats").upsert(
           {
             user_id: activeUser.id,
-            card_id: card.id,
-            box: srsUpdate.box,
-            interval_days: srsUpdate.interval_days,
-            ease_factor: srsUpdate.ease_factor,
-            next_review_at: srsUpdate.next_review_at,
-            last_practiced_at: srsUpdate.last_practiced_at,
+            email: activeUser.email,
+            full_name: activeUser.full_name,
+            avatar_url: activeUser.avatar_url || null,
+            current_streak: latestStreak.currentStreak,
+            last_study_date: latestStreak.lastStudyDate,
+            today_reviewed_count: latestStreak.todayReviewedCount,
+            updated_at: new Date().toISOString(),
           },
-          { onConflict: "user_id,card_id" }
+          { onConflict: "user_id" }
         );
-
-        if (latestStreak) {
-          await supabase.from("user_stats").upsert(
-            {
-              user_id: activeUser.id,
-              email: activeUser.email,
-              full_name: activeUser.full_name,
-              avatar_url: activeUser.avatar_url || null,
-              current_streak: latestStreak.currentStreak,
-              last_study_date: latestStreak.lastStudyDate,
-              today_reviewed_count: latestStreak.todayReviewedCount,
-              updated_at: new Date().toISOString(),
-            },
-            { onConflict: "user_id" }
-          );
-        }
-
-        saveStoredUserProfile(
-          {
-            ...activeUser,
-            last_synced_at: new Date().toISOString(),
-          },
-          false
-        );
-      } else {
-        // Anonymous global card table update
-        await supabase
-          .from("cards")
-          .update({
-            box: srsUpdate.box,
-            interval_days: srsUpdate.interval_days,
-            ease_factor: srsUpdate.ease_factor,
-            next_review_at: srsUpdate.next_review_at,
-            last_practiced_at: srsUpdate.last_practiced_at,
-          })
-          .eq("id", card.id);
       }
+
+      if (!progError) {
+        cloudProgressSaved = true;
+      }
+
+      saveStoredUserProfile(
+        {
+          ...activeUser,
+          last_synced_at: new Date().toISOString(),
+        },
+        false
+      );
     } catch {
-      // Already saved in localStorage
+      // Fallback to offline outbox below
     }
+  }
+
+  // If user is authenticated but offline or network request failed, enqueue to progress outbox
+  if (!cloudProgressSaved && activeUser) {
+    enqueuePendingProgress({
+      userId: activeUser.id,
+      cardId: card.id,
+      box: srsUpdate.box,
+      interval_days: srsUpdate.interval_days,
+      ease_factor: srsUpdate.ease_factor,
+      next_review_at: srsUpdate.next_review_at,
+      last_practiced_at: srsUpdate.last_practiced_at,
+      rating,
+    });
   }
 
   return updatedCard;

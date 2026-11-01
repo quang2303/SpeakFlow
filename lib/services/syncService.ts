@@ -1,15 +1,27 @@
-import { SupabaseClient } from "@supabase/supabase-js";
-import { Card, Deck } from "../seedData";
-import { PendingCardAction, PendingDeckAction, UserProfile } from "./types";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Card, Deck } from "../seedData";
+import type {
+  PendingCardAction,
+  PendingDeckAction,
+  PendingProgressAction,
+  PendingStudyLogAction,
+  ProgressSnapshot,
+  UserProfile,
+} from "./types";
 
 export const OUTBOX_STORAGE_KEYS = {
   PENDING_CARDS: "speakflow_pending_cards_v1",
   PENDING_DECKS: "speakflow_pending_decks_v1",
+  PENDING_PROGRESS: "speakflow_pending_progress_v1",
+  PENDING_LOGS: "speakflow_pending_logs_v1",
 };
 
-/**
- * Get all pending card actions stored offline
- */
+const MAX_RETRY_COUNT = 5;
+
+// ============================================================================
+// 1. CARDS OUTBOX QUEUE
+// ============================================================================
+
 export function getPendingCardActions(): PendingCardAction[] {
   if (typeof window === "undefined") return [];
   try {
@@ -20,35 +32,19 @@ export function getPendingCardActions(): PendingCardAction[] {
   }
 }
 
-/**
- * Get all pending deck actions stored offline
- */
-export function getPendingDeckActions(): PendingDeckAction[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = window.localStorage.getItem(OUTBOX_STORAGE_KEYS.PENDING_DECKS);
-    return raw ? (JSON.parse(raw) as PendingDeckAction[]) : [];
-  } catch {
-    return [];
-  }
-}
-
-/**
- * Enqueue a card action to be synced when network is available
- */
 export function enqueuePendingCard(
-  action: Omit<PendingCardAction, "id" | "timestamp">
+  action: Omit<PendingCardAction, "id" | "timestamp" | "retryCount">
 ): PendingCardAction {
   const item: PendingCardAction = {
     ...action,
     id: `pending-card-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
     timestamp: Date.now(),
+    retryCount: 0,
   };
 
   if (typeof window !== "undefined") {
     try {
       const current = getPendingCardActions();
-      // Replace existing pending action for same card if present
       const targetCardId = action.cardId || action.card?.id;
       const filtered = targetCardId
         ? current.filter((c) => (c.cardId || c.card?.id) !== targetCardId)
@@ -66,41 +62,6 @@ export function enqueuePendingCard(
   return item;
 }
 
-/**
- * Enqueue a deck action to be synced when network is available
- */
-export function enqueuePendingDeck(
-  action: Omit<PendingDeckAction, "id" | "timestamp">
-): PendingDeckAction {
-  const item: PendingDeckAction = {
-    ...action,
-    id: `pending-deck-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-    timestamp: Date.now(),
-  };
-
-  if (typeof window !== "undefined") {
-    try {
-      const current = getPendingDeckActions();
-      const targetDeckId = action.deckId || action.deck?.id;
-      const filtered = targetDeckId
-        ? current.filter((d) => (d.deckId || d.deck?.id) !== targetDeckId)
-        : current;
-      const next = [...filtered, item];
-      window.localStorage.setItem(
-        OUTBOX_STORAGE_KEYS.PENDING_DECKS,
-        JSON.stringify(next)
-      );
-    } catch {
-      // ignore local storage errors
-    }
-  }
-
-  return item;
-}
-
-/**
- * Remove executed card actions from outbox
- */
 export function removePendingCardActions(idsToRemove: string[]): void {
   if (typeof window === "undefined" || idsToRemove.length === 0) return;
   try {
@@ -116,9 +77,50 @@ export function removePendingCardActions(idsToRemove: string[]): void {
   }
 }
 
-/**
- * Remove executed deck actions from outbox
- */
+// ============================================================================
+// 2. DECKS OUTBOX QUEUE
+// ============================================================================
+
+export function getPendingDeckActions(): PendingDeckAction[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(OUTBOX_STORAGE_KEYS.PENDING_DECKS);
+    return raw ? (JSON.parse(raw) as PendingDeckAction[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function enqueuePendingDeck(
+  action: Omit<PendingDeckAction, "id" | "timestamp" | "retryCount">
+): PendingDeckAction {
+  const item: PendingDeckAction = {
+    ...action,
+    id: `pending-deck-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    timestamp: Date.now(),
+    retryCount: 0,
+  };
+
+  if (typeof window !== "undefined") {
+    try {
+      const current = getPendingDeckActions();
+      const targetDeckId = action.deckId || action.deck?.id;
+      const filtered = targetDeckId
+        ? current.filter((d) => (d.deckId || d.deck?.id) !== targetDeckId)
+        : current;
+      const next = [...filtered, item];
+      window.localStorage.setItem(
+        OUTBOX_STORAGE_KEYS.PENDING_DECKS,
+        JSON.stringify(next)
+      );
+    } catch {
+      // ignore
+    }
+  }
+
+  return item;
+}
+
 export function removePendingDeckActions(idsToRemove: string[]): void {
   if (typeof window === "undefined" || idsToRemove.length === 0) return;
   try {
@@ -134,9 +136,171 @@ export function removePendingDeckActions(idsToRemove: string[]): void {
   }
 }
 
+// ============================================================================
+// 3. PROGRESS OUTBOX QUEUE (SRS REVIEWS)
+// ============================================================================
+
+export function getPendingProgressActions(): PendingProgressAction[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(OUTBOX_STORAGE_KEYS.PENDING_PROGRESS);
+    return raw ? (JSON.parse(raw) as PendingProgressAction[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function enqueuePendingProgress(
+  action: Omit<PendingProgressAction, "id" | "timestamp" | "retryCount">
+): PendingProgressAction {
+  const item: PendingProgressAction = {
+    ...action,
+    id: `pending-prog-${action.userId}-${action.cardId}-${Date.now()}`,
+    timestamp: Date.now(),
+    retryCount: 0,
+  };
+
+  if (typeof window !== "undefined") {
+    try {
+      const current = getPendingProgressActions();
+      // Replace older pending progress for same user and card
+      const filtered = current.filter(
+        (p) => !(p.userId === action.userId && p.cardId === action.cardId)
+      );
+      const next = [...filtered, item];
+      window.localStorage.setItem(
+        OUTBOX_STORAGE_KEYS.PENDING_PROGRESS,
+        JSON.stringify(next)
+      );
+    } catch {
+      // ignore
+    }
+  }
+
+  return item;
+}
+
+export function removePendingProgressActions(idsToRemove: string[]): void {
+  if (typeof window === "undefined" || idsToRemove.length === 0) return;
+  try {
+    const current = getPendingProgressActions();
+    const set = new Set(idsToRemove);
+    const remaining = current.filter((p) => !set.has(p.id));
+    window.localStorage.setItem(
+      OUTBOX_STORAGE_KEYS.PENDING_PROGRESS,
+      JSON.stringify(remaining)
+    );
+  } catch {
+    // ignore
+  }
+}
+
+// ============================================================================
+// 4. STUDY LOGS OUTBOX QUEUE
+// ============================================================================
+
+export function getPendingStudyLogActions(): PendingStudyLogAction[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(OUTBOX_STORAGE_KEYS.PENDING_LOGS);
+    return raw ? (JSON.parse(raw) as PendingStudyLogAction[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function enqueuePendingStudyLog(
+  action: Omit<PendingStudyLogAction, "id" | "timestamp" | "retryCount">
+): PendingStudyLogAction {
+  const item: PendingStudyLogAction = {
+    ...action,
+    id: action.log.id || `pending-log-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    timestamp: Date.now(),
+    retryCount: 0,
+  };
+
+  if (typeof window !== "undefined") {
+    try {
+      const current = getPendingStudyLogActions();
+      const next = [...current.filter((l) => l.id !== item.id), item];
+      window.localStorage.setItem(
+        OUTBOX_STORAGE_KEYS.PENDING_LOGS,
+        JSON.stringify(next)
+      );
+    } catch {
+      // ignore
+    }
+  }
+
+  return item;
+}
+
+export function removePendingStudyLogActions(idsToRemove: string[]): void {
+  if (typeof window === "undefined" || idsToRemove.length === 0) return;
+  try {
+    const current = getPendingStudyLogActions();
+    const set = new Set(idsToRemove);
+    const remaining = current.filter((l) => !set.has(l.id));
+    window.localStorage.setItem(
+      OUTBOX_STORAGE_KEYS.PENDING_LOGS,
+      JSON.stringify(remaining)
+    );
+  } catch {
+    // ignore
+  }
+}
+
+// ============================================================================
+// 5. CONFLICT RESOLUTION ENGINE (Multi-Device / Offline Merge)
+// ============================================================================
+
 /**
- * Sanitize card object before inserting into Supabase
+ * Resolves progress conflict between a local device record and a remote cloud record.
+ * Rules:
+ * 1. Primary rule: Fresher `last_practiced_at` wins (reflects recent memory recall).
+ * 2. Safety-First Rule: If reviews occurred within 2 hours of each other and one side
+ *    is `box === 1` (Again / forgotten), ALWAYS preserve the forgotten state (box 1 / earlier next_review).
+ *    A learner should NEVER have a forgotten card marked as remembered by an out-of-order sync.
+ * 3. Tie-breaker: If identical timestamps, lower box wins (conservative review interval).
  */
+export function resolveCardProgressConflict(
+  local: ProgressSnapshot,
+  remote: ProgressSnapshot
+): { winner: "local" | "remote"; merged: ProgressSnapshot } {
+  const localTime = new Date(local.last_practiced_at || 0).getTime();
+  const remoteTime = new Date(remote.last_practiced_at || 0).getTime();
+
+  const timeDiffMs = Math.abs(localTime - remoteTime);
+  const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
+
+  // Safety-first check: if reviews happened closely and one is box 1 (Again), pick box 1
+  if (timeDiffMs <= TWO_HOURS_MS) {
+    if (local.box === 1 && remote.box > 1) {
+      return { winner: "local", merged: local };
+    }
+    if (remote.box === 1 && local.box > 1) {
+      return { winner: "remote", merged: remote };
+    }
+  }
+
+  // Normal recency rule
+  if (localTime > remoteTime) {
+    return { winner: "local", merged: local };
+  } else if (remoteTime > localTime) {
+    return { winner: "remote", merged: remote };
+  }
+
+  // Equal timestamps: pick lower box (conservative safety)
+  if (local.box <= remote.box) {
+    return { winner: "local", merged: local };
+  }
+  return { winner: "remote", merged: remote };
+}
+
+// ============================================================================
+// 6. OUTBOX DRAIN / FLUSH DISPATCHER
+// ============================================================================
+
 function sanitizeCardPayload(card: Card, activeUserId?: string | null): Record<string, unknown> {
   const payload: Record<string, unknown> = {
     id: card.id,
@@ -157,15 +321,22 @@ function sanitizeCardPayload(card: Card, activeUserId?: string | null): Record<s
 }
 
 /**
- * Flush all pending offline outbox changes to Supabase cloud.
- * Run automatically when network restores or during regular sync.
+ * Flush all pending offline outbox changes (decks, cards, user progress, study logs) to Supabase cloud.
  */
 export async function flushPendingOutboxSync(
   supabase: SupabaseClient,
   activeUser?: UserProfile | null
-): Promise<{ cardsSynced: number; decksSynced: number; errors: number }> {
+): Promise<{
+  cardsSynced: number;
+  decksSynced: number;
+  progressSynced: number;
+  logsSynced: number;
+  errors: number;
+}> {
   let cardsSynced = 0;
   let decksSynced = 0;
+  let progressSynced = 0;
+  let logsSynced = 0;
   let errors = 0;
 
   // 1. Flush Pending Decks
@@ -174,6 +345,10 @@ export async function flushPendingOutboxSync(
     const completedDeckActionIds: string[] = [];
 
     for (const item of pendingDecks) {
+      if ((item.retryCount || 0) >= MAX_RETRY_COUNT) {
+        completedDeckActionIds.push(item.id);
+        continue;
+      }
       try {
         if (item.action === "create" || item.action === "update") {
           if (!item.deck) continue;
@@ -195,6 +370,7 @@ export async function flushPendingOutboxSync(
             completedDeckActionIds.push(item.id);
             decksSynced++;
           } else {
+            item.retryCount = (item.retryCount || 0) + 1;
             errors++;
           }
         } else if (item.action === "delete") {
@@ -210,10 +386,12 @@ export async function flushPendingOutboxSync(
             completedDeckActionIds.push(item.id);
             decksSynced++;
           } else {
+            item.retryCount = (item.retryCount || 0) + 1;
             errors++;
           }
         }
       } catch {
+        item.retryCount = (item.retryCount || 0) + 1;
         errors++;
       }
     }
@@ -229,6 +407,10 @@ export async function flushPendingOutboxSync(
     const completedCardActionIds: string[] = [];
 
     for (const item of pendingCards) {
+      if ((item.retryCount || 0) >= MAX_RETRY_COUNT) {
+        completedCardActionIds.push(item.id);
+        continue;
+      }
       try {
         if (item.action === "create" || item.action === "update") {
           if (!item.card) continue;
@@ -241,6 +423,7 @@ export async function flushPendingOutboxSync(
             completedCardActionIds.push(item.id);
             cardsSynced++;
           } else {
+            item.retryCount = (item.retryCount || 0) + 1;
             errors++;
           }
         } else if (item.action === "delete") {
@@ -256,10 +439,12 @@ export async function flushPendingOutboxSync(
             completedCardActionIds.push(item.id);
             cardsSynced++;
           } else {
+            item.retryCount = (item.retryCount || 0) + 1;
             errors++;
           }
         }
       } catch {
+        item.retryCount = (item.retryCount || 0) + 1;
         errors++;
       }
     }
@@ -269,12 +454,114 @@ export async function flushPendingOutboxSync(
     }
   }
 
-  return { cardsSynced, decksSynced, errors };
+  // 3. Flush Pending Progress (user_card_progress)
+  if (activeUser?.id) {
+    const pendingProg = getPendingProgressActions().filter(
+      (p) => p.userId === activeUser.id
+    );
+    if (pendingProg.length > 0) {
+      const completedProgIds: string[] = [];
+      const rowsToUpsert = pendingProg
+        .filter((p) => (p.retryCount || 0) < MAX_RETRY_COUNT)
+        .map((p) => ({
+          user_id: p.userId,
+          card_id: p.cardId,
+          box: p.box,
+          interval_days: p.interval_days,
+          ease_factor: p.ease_factor,
+          next_review_at: p.next_review_at,
+          last_practiced_at: p.last_practiced_at,
+        }));
+
+      if (rowsToUpsert.length > 0) {
+        try {
+          const { error } = await supabase
+            .from("user_card_progress")
+            .upsert(rowsToUpsert, { onConflict: "user_id,card_id" });
+
+          if (!error) {
+            completedProgIds.push(...pendingProg.map((p) => p.id));
+            progressSynced += rowsToUpsert.length;
+          } else {
+            errors++;
+          }
+        } catch {
+          errors++;
+        }
+      }
+
+      // Mark dropped max retries
+      const expiredIds = pendingProg
+        .filter((p) => (p.retryCount || 0) >= MAX_RETRY_COUNT)
+        .map((p) => p.id);
+      completedProgIds.push(...expiredIds);
+
+      if (completedProgIds.length > 0) {
+        removePendingProgressActions(completedProgIds);
+      }
+    }
+  }
+
+  // 4. Flush Pending Study Logs (study_logs)
+  if (activeUser?.id) {
+    const pendingLogs = getPendingStudyLogActions().filter(
+      (l) => l.userId === activeUser.id
+    );
+    if (pendingLogs.length > 0) {
+      const completedLogIds: string[] = [];
+      const rowsToInsert = pendingLogs
+        .filter((l) => (l.retryCount || 0) < MAX_RETRY_COUNT)
+        .map((l) => ({
+          id: l.log.id,
+          user_id: l.userId,
+          user_name: l.log.user_name || activeUser.full_name,
+          user_email: l.log.user_email || activeUser.email,
+          mode: l.log.mode,
+          card_id: l.log.card_id || null,
+          phrase_en: l.log.phrase_en,
+          sentence_en: l.log.sentence_en,
+          spoken_text: l.log.spoken_text || null,
+          score: l.log.score,
+          rating: l.log.rating || null,
+          mispronounced_words: l.log.mispronounced_words || [],
+          created_at: l.log.created_at,
+        }));
+
+      if (rowsToInsert.length > 0) {
+        try {
+          const { error } = await supabase
+            .from("study_logs")
+            .upsert(rowsToInsert, { onConflict: "id" });
+
+          if (!error) {
+            completedLogIds.push(...pendingLogs.map((l) => l.id));
+            logsSynced += rowsToInsert.length;
+          } else {
+            errors++;
+          }
+        } catch {
+          errors++;
+        }
+      }
+
+      const expiredLogIds = pendingLogs
+        .filter((l) => (l.retryCount || 0) >= MAX_RETRY_COUNT)
+        .map((l) => l.id);
+      completedLogIds.push(...expiredLogIds);
+
+      if (completedLogIds.length > 0) {
+        removePendingStudyLogActions(completedLogIds);
+      }
+    }
+  }
+
+  return { cardsSynced, decksSynced, progressSynced, logsSynced, errors };
 }
 
-/**
- * Register a global listener for the 'online' event to flush outbox automatically.
- */
+// ============================================================================
+// 7. ONLINE SYNC LISTENER
+// ============================================================================
+
 let isOnlineListenerAttached = false;
 
 export function initOnlineSyncListener(
@@ -286,7 +573,6 @@ export function initOnlineSyncListener(
 
   isOnlineListenerAttached = true;
   const onlineHandler = () => {
-    // Small delay to ensure network handshake settles
     setTimeout(() => {
       void triggerSync();
     }, 1500);

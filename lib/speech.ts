@@ -8,14 +8,18 @@ export interface WordEvaluation {
 
 export interface PronunciationEvaluationResult {
   score: number; // 0 to 100: round((correctWords / totalWords) * 100)
+  sentenceMatchScore: number; // 0 to 100 text match accuracy
   correctCount: number;
   totalCount: number;
   feedback: string;
   level: "excellent" | "good" | "retry";
   words: WordEvaluation[];
   wordBreakdown: WordEvaluation[]; // Alias for backwards compatibility
+  missingWords: string[];
+  extraWords: string[];
   normalizedTarget: string;
   normalizedSpoken: string;
+  assessmentType: "speech_recognition_text_match";
 }
 
 // Keep legacy type aliases so any existing imports remain valid
@@ -338,14 +342,18 @@ export function evaluatePronunciation(
   if (m === 0) {
     return {
       score: 100,
+      sentenceMatchScore: 100,
       correctCount: 0,
       totalCount: 0,
       feedback: "Tuyệt vời!",
       level: "excellent",
       words: [],
       wordBreakdown: [],
+      missingWords: [],
+      extraWords: [],
       normalizedTarget: "",
       normalizedSpoken: "",
+      assessmentType: "speech_recognition_text_match",
     };
   }
 
@@ -358,14 +366,18 @@ export function evaluatePronunciation(
     }));
     return {
       score: 0,
+      sentenceMatchScore: 0,
       correctCount: 0,
       totalCount: m,
       feedback: "Chưa nghe rõ, bạn hãy thử đọc to hơn nhé!",
       level: "retry",
       words: missingWords,
       wordBreakdown: missingWords,
+      missingWords: targetTokens.map((t) => t.cleanWord),
+      extraWords: [],
       normalizedTarget: normalizeSpeechText(targetSentence),
       normalizedSpoken: "",
+      assessmentType: "speech_recognition_text_match",
     };
   }
 
@@ -492,16 +504,29 @@ export function evaluatePronunciation(
     level = "good";
   }
 
+  const missingWords = words
+    .filter((w) => w.status === "missing")
+    .map((w) => w.cleanWord || w.originalWord);
+
+  const alignedSet = new Set(
+    alignedSpokenIndex.filter((idx): idx is number => idx !== null)
+  );
+  const extraWords = spokenWords.filter((_, idx) => !alignedSet.has(idx));
+
   return {
     score,
+    sentenceMatchScore: score,
     correctCount,
     totalCount: m,
     feedback,
     level,
     words,
     wordBreakdown: words,
+    missingWords,
+    extraWords,
     normalizedTarget: normalizeSpeechText(targetSentence),
     normalizedSpoken: normalizeSpeechText(spokenTranscript),
+    assessmentType: "speech_recognition_text_match",
   };
 }
 
@@ -860,6 +885,16 @@ export function startSpeechRecognition(callbacks: {
   let latestTranscript = "";
   let finalized = false;
   let hasError = false;
+  let hasDeliveredFinalResult = false;
+
+  function deliverFinalResult(text: string) {
+    if (hasDeliveredFinalResult) return;
+    hasDeliveredFinalResult = true;
+    finalized = true;
+    callbacks.onStateChange?.("processing");
+    callbacks.onFinalResult(text);
+    callbacks.onStateChange?.("idle");
+  }
 
   recognition.onstart = () => {
     callbacks.onStateChange?.("listening");
@@ -880,11 +915,8 @@ export function startSpeechRecognition(callbacks: {
 
     if (finalStr) {
       latestTranscript = finalStr.trim();
-      finalized = true;
-      callbacks.onStateChange?.("processing");
       callbacks.onInterimResult?.(latestTranscript);
-      callbacks.onFinalResult(latestTranscript);
-      callbacks.onStateChange?.("idle");
+      deliverFinalResult(latestTranscript);
     } else if (interim) {
       latestTranscript = interim.trim();
       callbacks.onInterimResult?.(latestTranscript);
@@ -930,12 +962,9 @@ export function startSpeechRecognition(callbacks: {
     if (activeRecognitionInstance === recognition) {
       activeRecognitionInstance = null;
     }
-    if (!finalized && !hasError) {
+    if (!hasDeliveredFinalResult && !hasError) {
       if (latestTranscript) {
-        finalized = true;
-        callbacks.onStateChange?.("processing");
-        callbacks.onFinalResult(latestTranscript);
-        callbacks.onStateChange?.("idle");
+        deliverFinalResult(latestTranscript);
       } else {
         callbacks.onStateChange?.("idle");
       }

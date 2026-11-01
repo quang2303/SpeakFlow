@@ -103,6 +103,17 @@ export interface AdminStudentMetrics {
 }
 
 /**
+ * Progress snapshot used for per-card sync and conflict resolution
+ */
+export interface ProgressSnapshot {
+  box: number;
+  interval_days: number;
+  ease_factor: number;
+  next_review_at: string;
+  last_practiced_at: string;
+}
+
+/**
  * Outbox actions for resilient offline syncing
  */
 export interface PendingCardAction {
@@ -112,6 +123,7 @@ export interface PendingCardAction {
   cardId?: string;
   userId?: string | null;
   timestamp: number;
+  retryCount?: number;
 }
 
 export interface PendingDeckAction {
@@ -121,4 +133,27 @@ export interface PendingDeckAction {
   deckId?: string;
   userId?: string | null;
   timestamp: number;
+  retryCount?: number;
+}
+
+export interface PendingProgressAction {
+  id: string; // Action unique ID (cardId + timestamp dedup)
+  userId: string;
+  cardId: string;
+  box: number;
+  interval_days: number;
+  ease_factor: number;
+  next_review_at: string;
+  last_practiced_at: string;
+  rating?: SRSRating;
+  timestamp: number;
+  retryCount?: number;
+}
+
+export interface PendingStudyLogAction {
+  id: string; // Log ID
+  userId: string;
+  log: StudyActivityLog;
+  timestamp: number;
+  retryCount?: number;
 }

@@ -6,7 +6,8 @@
     "dev": "node -r ./scripts/fs-patch.cjs ./node_modules/next/dist/bin/next dev",
     "build": "node -r ./scripts/fs-patch.cjs ./node_modules/next/dist/bin/next build",
     "start": "node -r ./scripts/fs-patch.cjs ./node_modules/next/dist/bin/next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test": "node --experimental-strip-types scripts/test_learning_engine.cjs && node --experimental-strip-types scripts/test_speech_engine.cjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",
